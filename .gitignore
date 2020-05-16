@@ -4,3 +4,6 @@
 *.dat
 *.out
 *.log
+dat_*
+test.*
+plot.py
