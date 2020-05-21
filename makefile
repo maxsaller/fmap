@@ -1,6 +1,9 @@
 FLAGS=-fopenmp
 LAPACK=/usr/lib/liblapack.so
 
+windows: LAPACK=-llapack
+windows: all
+
 all: vars.o ranlux.o fmap.o
 	gfortran -O2 -o fmap.x $^ $(LAPACK) $(FLAGS)
 
