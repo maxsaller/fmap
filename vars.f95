@@ -19,11 +19,13 @@ module variables
     double precision :: kondo                   ! Bath kondo parameter
     double precision :: delta                   ! Constant electronic coupling
     double precision :: omegac                  ! Bath cutoff frequency
+    double precision :: omegamax                ! Maximum frequency for Makri
     double precision :: epsilon                 ! Electronic energy bias
     character(len=6) :: Aop                     ! Electronic sampling type
     character(len=6) :: Bop                     ! Electronic sampling type
     character(len=4) :: electronic              ! Electronic sampling type
     character(len=14):: intgt                   ! Type of integrator to use
+    character(len=5) :: discretize              ! Type of discretization to use
 
     ! TRAJECTORY VARIABLES
     double precision, allocatable :: xn(:)      ! Nuclear position
@@ -52,5 +54,12 @@ module variables
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
     double precision, allocatable :: work(:)    ! Work array for LAPACK
+
+    ! TIMING PARAMETERS
+    double precision :: start, end, start1, end1! Dummy variables
+    double precision :: t_total                 ! Total time
+    double precision :: t_traj                  ! Trajectory time
+    double precision :: t_ops                   ! Operator calculation time
+    double precision :: t_eom                   ! Equations of motion time
 
 end module variables

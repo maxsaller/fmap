@@ -9,6 +9,12 @@ program fmap
     integer :: t,ts,pctg
     character(len=1) :: cr = char(13)
 
+    ! START TIMING
+    t_eom = 0.d0
+    t_ops = 0.d0
+    t_traj = 0.d0
+    call cpu_time( t_total )
+
     ! HEADER
     write(6,"(a50,//,23x,a4,23x,//,2x,a46,2x,//,a50,/)") repeat("#",50),&
     "FMAP","Correlation functions via the mapping approach",repeat("#",50)
@@ -25,6 +31,9 @@ program fmap
     ! MONTE CARLO LOOP
     do t = 1,ntraj
 
+        ! TIMING
+        call cpu_time( start )
+
         ! REPORT TRAJECTORY PROGRESS
         if ( t > 1 .and. mod(t,(ntraj/100)) == 0 ) then
             pctg = floor(1.d2*t/dble(ntraj))
@@ -39,12 +48,16 @@ program fmap
         call sample_electronic()
 
         ! CALCULATE TIME ZERO OPERATORS
+        call cpu_time( start1 )
         call time_zero_ops()
+        call cpu_time( end1 )
+        t_ops = t_ops + end1 - start1
 
         ! TRAJECTORY LOOP
         do ts = 1,tsteps
 
             ! MAKE DYNAMICS STEP
+            call cpu_time( start1 )
             if ( intgt == "diagonalise" .or. intgt == "diag" ) then
                 call step_diag()
             else if ( intgt == "velocityverlet" .or. intgt == "vv") then
@@ -54,12 +67,20 @@ program fmap
                            "'diagonalise'/'diag' or 'velocityverlet'/'vv'!"
                 stop
             end if
+            call cpu_time( end1 )
+            t_eom = t_eom + end1 - start1
 
             ! CALCULATE TIME t OPERATORS AND ACCUMULATE OBSERVABLES
+            call cpu_time( start1 )
             call time_t_ops()
             call accumulate_obs(ts)
+            call cpu_time( end1 )
+            t_ops = t_ops + end1 - start1
 
         end do
+
+        call cpu_time( end )
+        t_traj = t_traj + end - start
 
     end do
 
@@ -69,7 +90,18 @@ program fmap
     ! DEALLOCATE ARRAYS
     call deallocate_arrays()
 
-    ! FINISH UP
+    ! FINISH TIMING
+    call cpu_time( end )
+    t_total = end - t_total
+    t_traj = t_traj / dble(ntraj)
+    t_ops = t_ops / dble(ntraj)
+    t_eom = t_eom / dble(ntraj)
+    write(6, "(/'TIMING:')")
+    write(6, "('- Total time:            ',1x,f12.3,1x,'s')") t_total
+    write(6, "('- Avg. trajectory time:  ',1x,f12.3,1x,'s')") t_traj
+    write(6, "('- Avg. integration time: ',1x,f12.3,1x,'s')") t_eom
+    write(6, "('- Avg. op/obs calc. time:',1x,f12.3,1x,'s')") t_ops
+
     write(6,"(/'SIMULATION COMPLETE!')")
 
 end program fmap
@@ -92,7 +124,9 @@ subroutine read_input()
     read(11, *) dum, delta
     read(11, *) dum, kondo
     read(11, *) dum, omegac
+    read(11, *) dum, omegamax
     read(11, *) dum, beta
+    read(11, *) dum, discretize
     read(11, '(A)') dum
     read(11, *)
 
@@ -206,15 +240,27 @@ subroutine spectral_density()
     use variables
     implicit none
     integer :: i
-    double precision :: eta
+    double precision :: eta, omega0
 
     eta = 0.5d0 * pi * kondo
 
-    ! Ohmic bath, discretization a la Craig&Mano
-    do i = 1,F
-        omega(i) = -omegac * log( (i-0.5d0) / dble(F) )
-        c(i) = omega(i) * dsqrt( (2 * eta * omegac) / (pi * F) )
-    end do
+    if ( discretize == "craig" ) then
+        ! Ohmic bath, discretization a la Craig&Mano
+        do i = 1,F
+            omega(i) = -omegac * log( (i-0.5d0) / dble(F) )
+            c(i) = omega(i) * dsqrt( (2 * eta * omegac) / (pi * F) )
+        end do
+    else if ( discretize == "makri") then
+        ! Ohmic bath, discretization a la Ellen
+        omega0 = omegac/dble(F) * ( 1 - exp(-omegamax/omegac) )
+        do i = 1,F
+            omega(i) = -omegac * log( 1 - i*omega0/omegac )
+            c(i) = dsqrt( kondo * omega0 ) * omega(i)
+        end do
+    else
+        write(6,*) "ERROR: Discretization method must be either ",&
+                   "'craig' or 'makri'!"
+    end if
 
 end subroutine spectral_density
 
