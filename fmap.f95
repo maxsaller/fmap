@@ -20,7 +20,7 @@ program fmap
     call allocate_arrays()
 
     ! SET UP BATH
-    call spectral_density()
+    call system_bath_properties()
 
     ! MONTE CARLO LOOP
     do t = 1,ntraj
@@ -88,11 +88,6 @@ subroutine read_input()
     read(11, '(A)') dum
     read(11, *) dum, S
     read(11, *) dum, F
-    read(11, *) dum, epsilon
-    read(11, *) dum, delta
-    read(11, *) dum, kondo
-    read(11, *) dum, omegac
-    read(11, *) dum, beta
     read(11, '(A)') dum
     read(11, *)
 
@@ -143,6 +138,9 @@ subroutine allocate_arrays()
     allocate( XE(S) )
     allocate( PE(S) )
 
+    ! SYSTEM ARRAYS
+    allocate( eps(S) )
+
     ! BATH ARRAYS
     allocate( c(F) )
     allocate( omega(F) )
@@ -150,7 +148,6 @@ subroutine allocate_arrays()
     ! POTENTIAL AND FORCE MATRICES
     allocate( G0(F) )
     allocate( V(S,S) )
-    allocate( G(F,S,S) )
 
     ! OBSERVABLE ARRAYS
     allocate( pop_0(S) )
@@ -180,13 +177,15 @@ subroutine deallocate_arrays()
     deallocate( XE )
     deallocate( PE )
 
+    ! SYSTEM ARRAYS
+    deallocate( eps )
+
     ! BATH ARRAYS
     deallocate( c )
     deallocate( omega )
 
     ! POTENTIAL AND FORCE MATRICES
     deallocate( V )
-    deallocate( G )
     deallocate( G0 )
 
     ! OBSERVABLE ARRAYS
@@ -201,22 +200,23 @@ end subroutine deallocate_arrays
 
 
 ! Sets bath frequencies and coupling coefficients
-subroutine spectral_density()
+subroutine system_bath_properties()
 
     use variables
     implicit none
     integer :: i
-    double precision :: eta
 
-    eta = 0.5d0 * pi * kondo
+    mu     = 1.034d0
+    eps(1) = -0.6738d0
+    eps(2) = -0.2798d0 
+    L      = 236215.76557822127d0
 
-    ! Ohmic bath, discretization a la Craig&Mano
     do i = 1,F
-        omega(i) = -omegac * log( (i-0.5d0) / dble(F) )
-        c(i) = omega(i) * dsqrt( (2 * eta * omegac) / (pi * F) )
+        omega(i) = pi * sol * dble(2 * i - 1) / L
+        c(i) = mu * omega(i) * 0.0103d0 * (-1)**(i+1)
     end do
 
-end subroutine spectral_density
+end subroutine system_bath_properties
 
 ! Samples nuclear positions and momenta
 subroutine sample_nuclear()
@@ -224,12 +224,11 @@ subroutine sample_nuclear()
     use variables
     implicit none
     integer :: i
-    double precision :: tv, r1, r2, xn_stdev, pn_stdev
+    double precision :: r1, r2, xn_stdev, pn_stdev
 
     do i = 1,F
-        tv = tanh(0.5d0 * beta * omega(i))
-        xn_stdev = dsqrt( 1.d0 / (2.d0 * omega(i) * tv) ) 
-        pn_stdev = dsqrt( omega(i) / (2.d0 * tv) )
+        xn_stdev = dsqrt( 1.d0 / (2.d0 * omega(i)) ) 
+        pn_stdev = dsqrt( omega(i) / 2.d0 )
         call gauss(r1, r2)
         xn(i) = xn_stdev * r1
         pn(i) = pn_stdev * r2
@@ -356,9 +355,7 @@ subroutine step_vverlet()
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        do j = 1,S
-            pn(i) = pn(i) - qdt * (G(i,j,j)*(XE(j)**2 + PE(j)**2))
-        end do
+        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
     end do
 
     ! HALF STEP IN MAPPING MOMENTA
@@ -380,9 +377,7 @@ subroutine step_vverlet()
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        do j = 1,S
-            pn(i) = pn(i) - qdt * (G(i,j,j)*(XE(j)**2 + PE(j)**2))
-        end do
+        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
     end do
 
 end subroutine step_vverlet
@@ -414,9 +409,7 @@ subroutine step_diag
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        do j = 1,S
-            pn(i) = pn(i) - qdt * (G(i,j,j)*(XE(j)**2 + PE(j)**2))
-        end do
+        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
     end do
 
     ! FULL STEP IN NUCLEAR POSITIONS
@@ -430,9 +423,7 @@ subroutine step_diag
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        do j = 1,S
-            pn(i) = pn(i) - qdt * (G(i,j,j)*(XE(j)**2 + PE(j)**2))
-        end do
+        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
     end do
 
     ! HALF STEP IN MAPPING VARIABLES
@@ -463,31 +454,19 @@ subroutine potential_force()
     end do
 
     ! POTENTIAL ENERGY MATRIX AND FORCE TENSOR
-    V(1,1) = epsilon
-    V(1,2) = delta
-    V(2,1) = delta
-    V(2,2) = -epsilon
-    G(:,:,:) = 0.d0
+    V(:,:) = 0.d0
+    V(1,1) = eps(1)
+    V(2,2) = eps(2)
     do i = 1,F
-        V(1,1) = V(1,1) + c(i) * xn(i)
-        V(2,2) = V(2,2) - c(i) * xn(i)
-        G(i,1,1) = c(i)
-        G(i,2,2) = -c(i)
+        V(1,2) = V(1,2) + c(i) * xn(i)
+        V(2,1) = V(2,1) + c(i) * xn(i)
     end do
 
-    ! SHIFT TRACE OF V and G to V0 and G0
+    ! SHIFT TRACE OF V. NOTE THAT G IS ALREADY TRACELESS
     tr = trace(V,S)/dble(S)
     V0 = V0 + tr
     do i = 1,S
         V(i,i) = V(i,i) - tr
-    end do
-    
-    do i = 1,F
-        tr = trace(G(i,:,:),S)/dble(S)
-        G0(i) = G0(i) + tr
-        do j = 1,S
-            G(i,j,j) = G(i,j,j) - tr
-        end do
     end do
 
 end subroutine potential_force

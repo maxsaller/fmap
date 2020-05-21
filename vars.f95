@@ -3,8 +3,9 @@ module variables
     implicit none
 
     ! CONSTANTS
-    double precision, parameter :: pi = 3.14159265359d0
     double complex, parameter :: eye = dcmplx(0.d0, 1.d0)
+    double precision, parameter :: pi = 3.14159265359d0
+    double precision, parameter :: sol = 137.03599908381668d0
 
     ! PARALLEL PARAMETERS
     integer :: threads                          ! Number of max OMP threads
@@ -15,11 +16,6 @@ module variables
     integer :: ntraj                            ! Number of trajectories
     integer :: tsteps                           ! Number of time-steps
     double precision :: dt                      ! Time-step duration
-    double precision :: beta                    ! Inverse temperature
-    double precision :: kondo                   ! Bath kondo parameter
-    double precision :: delta                   ! Constant electronic coupling
-    double precision :: omegac                  ! Bath cutoff frequency
-    double precision :: epsilon                 ! Electronic energy bias
     character(len=6) :: Aop                     ! Electronic sampling type
     character(len=6) :: Bop                     ! Electronic sampling type
     character(len=4) :: electronic              ! Electronic sampling type
@@ -35,11 +31,15 @@ module variables
     double precision :: V0                       ! State-independent potential
     double precision, allocatable :: V(:,:)      ! Potential energy matrix
     double precision, allocatable :: G0(:)       ! State-independent force
-    double precision, allocatable :: G(:,:,:)    ! Force tensor
+
+    ! SYSTEM PROPERTIES
+    double precision :: L                        ! Length of cavity
+    double precision :: mu                       ! Dipole operator
+    double precision, allocatable :: eps(:)      ! State energies
 
     ! BATH VARIABLES
     double precision, allocatable :: omega(:)   ! Bath frequencies
-    double precision, allocatable :: c(:)       ! Bath coupling coefficients
+    double precision, allocatable :: c(:)       ! Electron-phonon couplings
 
     ! OBSERVABLES
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
