@@ -27,7 +27,7 @@ program fmap
 
         ! REPORT TRAJECTORY PROGRESS
         if ( t > 1 .and. mod(t,(ntraj/100)) == 0 ) then
-            pctg = floor(1.d2*t/float(ntraj))
+            pctg = floor(1.d2*t/dble(ntraj))
             write(6, "(a22,i3,a1,1x,52a)", advance="no") &
             "RUNNING TRAJECTORIES: ", pctg, "%", &
             "[", repeat("#", pctg/2), repeat(" ", 50-pctg/2), "]", cr
@@ -155,8 +155,12 @@ subroutine allocate_arrays()
     ! OBSERVABLE ARRAYS
     allocate( pop_0(S) )
     allocate( pop_t(S) )
+    allocate( Qop_0(S) )
+    allocate( Qop_t(S) )
     allocate( Cpop(tsteps,S,S) )
+    allocate( Cimp(tsteps,S,S) )
     Cpop(:,:,:) = 0.d0
+    Cimp(:,:,:) = 0.d0
 
 end subroutine allocate_arrays
 
@@ -187,8 +191,11 @@ subroutine deallocate_arrays()
 
     ! OBSERVABLE ARRAYS
     deallocate( Cpop )
+    deallocate( Cimp )
     deallocate( pop_0 )
     deallocate( pop_t )
+    deallocate( Qop_0 )
+    deallocate( Qop_t )
 
 end subroutine deallocate_arrays
 
@@ -205,7 +212,7 @@ subroutine spectral_density()
 
     ! Ohmic bath, discretization a la Craig&Mano
     do i = 1,F
-        omega(i) = -omegac * log( (i-0.5d0) / float(F) )
+        omega(i) = -omegac * log( (i-0.5d0) / dble(F) )
         c(i) = omega(i) * dsqrt( (2 * eta * omegac) / (pi * F) )
     end do
 
@@ -268,9 +275,10 @@ subroutine time_zero_ops()
 
     use variables
     implicit none
-    integer :: i
+    integer :: i,j
     double precision :: zpe
 
+    ! TRADITIONAL POPULATION OPERATORS
     if ( Aop == "seo" ) then
         zpe = 0.5d0
     else if ( Aop == "wigner" ) then
@@ -284,6 +292,16 @@ subroutine time_zero_ops()
         pop_0(i) = 0.5d0 * ( XE(i)**2 + PE(i)**2 - zpe )
     end do
 
+    ! IMPROVED POPULATION OPERATORS
+    do i = 1,S
+        Qop_0(i) = 0.5d0 * dble(S-1) * ( XE(i)**2 + PE(i)**2 )
+        do j = 1,S
+            if ( j /= i ) then
+                Qop_0(i) = Qop_0(i) - 0.5d0 * ( XE(j)**2 + PE(j)**2 )
+            end if
+        end do
+    end do
+
 end subroutine time_zero_ops
 
 
@@ -292,9 +310,10 @@ subroutine time_t_ops()
 
     use variables
     implicit none
-    integer :: i
+    integer :: i,j
     double precision :: zpe
 
+    ! TRADITIONAL POPULATION OPERATORS
     if ( Bop == "seo" ) then
         zpe = 0.5d0
     else if ( Bop == "wigner" ) then
@@ -306,6 +325,16 @@ subroutine time_t_ops()
 
     do i = 1,S
         pop_t(i) = 0.5d0 * ( XE(i)**2 + PE(i)**2 - zpe )
+    end do
+
+    ! IMPROVED POPULATION OPERATORS
+    do i = 1,S
+        Qop_t(i) = 0.5d0 * dble(S-1) * ( XE(i)**2 + PE(i)**2 )
+        do j = 1,S
+            if ( j /= i ) then
+                Qop_t(i) = Qop_t(i) - 0.5d0 * ( XE(j)**2 + PE(j)**2 )
+            end if
+        end do
     end do
 
 end subroutine time_t_ops
@@ -447,14 +476,14 @@ subroutine potential_force()
     end do
 
     ! SHIFT TRACE OF V and G to V0 and G0
-    tr = trace(V,S)/float(S)
+    tr = trace(V,S)/dble(S)
     V0 = V0 + tr
     do i = 1,S
         V(i,i) = V(i,i) - tr
     end do
     
     do i = 1,F
-        tr = trace(G(i,:,:),S)/float(S)
+        tr = trace(G(i,:,:),S)/dble(S)
         G0(i) = G0(i) + tr
         do j = 1,S
             G(i,j,j) = G(i,j,j) - tr
@@ -473,6 +502,7 @@ subroutine accumulate_obs(ts)
     integer, intent(in) :: ts
     double precision :: norm
 
+    ! TRADITIONAL POPULATION OPERATORS
     if ( Aop == "seo" .and. Bop == "seo" ) then
         norm = 16.d0
     else if ( Aop == "wigner" .and. Bop == "wigner" ) then
@@ -490,6 +520,19 @@ subroutine accumulate_obs(ts)
         end do
     end do
 
+    ! IMPROVED POPULATION OPERATORS
+    if ( electronic == "phi" ) then
+        norm = 4.d0
+    else if ( electronic == "phi2" ) then
+        norm = 16.d0
+    end if
+    do i = 1,S
+        do j = 1,S
+            Cimp(ts,i,j) = Cimp(ts,i,j) + &
+            ( S + norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / dble(S**2)
+        end do
+    end do    
+
 end subroutine accumulate_obs
 
 
@@ -502,14 +545,25 @@ subroutine average_obs()
 
     write(6,"(//'AVERAGING OBSERVABLES:')")
 
+    ! TRADITIONAL POPULATION OPERATORS
     open(11, file="Cpop.out", action="write", status="unknown")
     do i = 1,tsteps
-        Cpop(i,:,:) = Cpop(i,:,:) / float(ntraj)
+        Cpop(i,:,:) = Cpop(i,:,:) / dble(ntraj)
         write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        float(i)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
+        dble(i)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
     end do
     close(11)
     write(6,"('- Saved population autocorrelation functions to Cpop.out')")
+
+    ! IMPROVED POPULATION OPERATORS
+    open(11, file="Cimp.out", action="write", status="unknown")
+    do i = 1,tsteps
+        Cimp(i,:,:) = Cimp(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i)*dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,2,1), Cimp(i,2,2)
+    end do
+    close(11)
+    write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
 
 end subroutine average_obs
 
