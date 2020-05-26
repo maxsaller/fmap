@@ -47,9 +47,11 @@ program fmap
         call sample_nuclear()
         call sample_electronic()
 
-        ! CALCULATE TIME ZERO OPERATORS
+        ! CALCULATE TIME ZERO OPERATORS AND OBSERVABLE VALUES
         call cpu_time( start1 )
         call time_zero_ops()
+        call accumulate_obs(1)
+        call proj_free_inputs(1)
         call cpu_time( end1 )
         t_ops = t_ops + end1 - start1
 
@@ -73,12 +75,14 @@ program fmap
             ! CALCULATE TIME t OPERATORS AND ACCUMULATE OBSERVABLES
             call cpu_time( start1 )
             call time_t_ops()
-            call accumulate_obs(ts)
+            call accumulate_obs(ts+1)
+            call proj_free_inputs(ts+1)
             call cpu_time( end1 )
             t_ops = t_ops + end1 - start1
 
         end do
 
+        ! TIMING
         call cpu_time( end )
         t_traj = t_traj + end - start
 
@@ -178,7 +182,7 @@ subroutine allocate_arrays()
     allocate( PE(S) )
 
     ! BATH ARRAYS
-    allocate( c(F) )
+    allocate( coeff(F) )
     allocate( omega(F) )
 
     ! POTENTIAL AND FORCE MATRICES
@@ -186,15 +190,32 @@ subroutine allocate_arrays()
     allocate( V(S,S) )
     allocate( G(F,S,S) )
 
-    ! OBSERVABLE ARRAYS
+    ! POPULATION ARRAYS
     allocate( pop_0(S) )
     allocate( pop_t(S) )
     allocate( Qop_0(S) )
     allocate( Qop_t(S) )
-    allocate( Cpop(tsteps,S,S) )
-    allocate( Cimp(tsteps,S,S) )
+    allocate( Cpop(tsteps+1,S,S) )
+    allocate( Cimp(tsteps+1,S,S) )
     Cpop(:,:,:) = 0.d0
     Cimp(:,:,:) = 0.d0
+
+    ! PROJECTION FREE INPUT ARRAYS
+    allocate( F1(tsteps+1,S,S,S,S) )
+    allocate( F2(tsteps+1,S,S,S,S) )
+    allocate( K1(tsteps+1,S,S,S,S) )
+    allocate( K3(tsteps+1,S,S,S,S) )
+    allocate( coh_0(S) )
+    allocate( coh_t(S) )
+    F1(:,:,:,:,:) = 0.d0
+    F2(:,:,:,:,:) = 0.d0
+    K1(:,:,:,:,:) = 0.d0
+    K3(:,:,:,:,:) = 0.d0
+    coh_0(:) = 0.d0
+    coh_t(:) = 0.d0
+    G1_0 = 0.d0
+    G1_t = 0.d0
+    G2_0 = 0.d0
 
 end subroutine allocate_arrays
 
@@ -215,7 +236,7 @@ subroutine deallocate_arrays()
     deallocate( PE )
 
     ! BATH ARRAYS
-    deallocate( c )
+    deallocate( coeff )
     deallocate( omega )
 
     ! POTENTIAL AND FORCE MATRICES
@@ -223,13 +244,21 @@ subroutine deallocate_arrays()
     deallocate( G )
     deallocate( G0 )
 
-    ! OBSERVABLE ARRAYS
+    ! POPULATION ARRAYS
     deallocate( Cpop )
     deallocate( Cimp )
     deallocate( pop_0 )
     deallocate( pop_t )
     deallocate( Qop_0 )
     deallocate( Qop_t )
+
+    ! PROJECTION FREE INPUT ARRAYS
+    deallocate( coh_0 )
+    deallocate( coh_t )
+    deallocate( F1 )
+    deallocate( F2 )
+    deallocate( K1 )
+    deallocate( K3 )
 
 end subroutine deallocate_arrays
 
@@ -248,14 +277,14 @@ subroutine spectral_density()
         ! Ohmic bath, discretization a la Craig&Mano
         do i = 1,F
             omega(i) = -omegac * log( (i-0.5d0) / dble(F) )
-            c(i) = omega(i) * dsqrt( (2 * eta * omegac) / (pi * F) )
+            coeff(i) = omega(i) * dsqrt( (2 * eta * omegac) / (pi * F) )
         end do
     else if ( discretize == "makri") then
         ! Ohmic bath, discretization a la Ellen
         omega0 = omegac/dble(F) * ( 1 - exp(-omegamax/omegac) )
         do i = 1,F
             omega(i) = -omegac * log( 1 - i*omega0/omegac )
-            c(i) = dsqrt( kondo * omega0 ) * omega(i)
+            coeff(i) = - dsqrt( kondo * omega0 ) * omega(i) ! Note factor of -1!
         end do
     else
         write(6,*) "ERROR: Discretization method must be either ",&
@@ -348,6 +377,35 @@ subroutine time_zero_ops()
         end do
     end do
 
+    ! PFI BATH FUNCTIONS
+    do i = 1,F
+        G1_0 = G1_0 - coeff(i) * xn(i)
+        G2_0 = G2_0 + eye * coeff(i) * pn(i) * &
+               tanh(beta * omega(i)/2.d0) / omega(i)
+    end do
+
+    ! COHERENCES
+    coh_0(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
+    coh_0(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
+
+    ! CALCULATE NORMS
+    if ( Aop == "seo" .and. Bop == "seo" ) then
+        pop_norm = 16.d0
+    else if ( Aop == "wigner" .and. Bop == "wigner" ) then
+        write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
+                   "'wigner' does not make sense! At least one operator ",&
+                   "must be projected onto onto the SEO subspace!"
+        stop
+    else
+        pop_norm = 4.d0
+    endif
+
+    if ( electronic == "phi" ) then
+        imp_norm = 4.d0
+    else if ( electronic == "phi2" ) then
+        imp_norm = 16.d0
+    end if
+
 end subroutine time_zero_ops
 
 
@@ -383,8 +441,188 @@ subroutine time_t_ops()
         end do
     end do
 
+    ! PFI BATH FUNCTIONS
+    do i = 1,F
+        G1_t = G1_t - coeff(i) * xn(i)
+    end do
+
+    ! COHERENCES
+    coh_t(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
+    coh_t(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
+
 end subroutine time_t_ops
 
+
+! Accumulates observables
+subroutine accumulate_obs(ts)
+
+    use variables
+    implicit none
+    integer :: i,j
+    integer, intent(in) :: ts
+
+    ! USE TIME 0 VALUES IF AT TIMESTEP 0 (FORTRAN: 0=1)
+    if ( ts == 1 ) then
+        pop_t(:) = pop_0(:)
+        Qop_t(:) = Qop_0(:)
+    end if
+
+    ! TRADITIONAL POPULATION OPERATORS
+    do i = 1,S
+        do j = 1,S
+            Cpop(ts,i,j) = Cpop(ts,i,j) + pop_norm * pop_0(i) * pop_t(j)
+        end do
+    end do
+
+    ! IMPROVED POPULATION OPERATORS
+    do i = 1,S
+        do j = 1,S
+            Cimp(ts,i,j) = Cimp(ts,i,j) + &
+            ( S + imp_norm * Qop_t(j) + imp_norm * Qop_0(i)*Qop_t(j) ) / &
+            dble(S**2)
+        end do
+    end do    
+
+end subroutine accumulate_obs
+
+
+! Averages and outputs observable arrays
+subroutine average_obs()
+
+    use variables
+    implicit none
+    integer :: i,j,k,a,b,c,d
+    character(len=80) :: F1name, F2name, K1name, K3name
+
+    write(6,"(//'AVERAGING OBSERVABLES:')")
+
+    ! TRADITIONAL POPULATION OPERATORS
+    open(11, file="Cpop.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        Cpop(i,:,:) = Cpop(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i-1)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
+    end do
+    close(11)
+    write(6,"('- Saved population autocorrelation functions to Cpop.out')")
+
+    ! IMPROVED POPULATION OPERATORS
+    open(11, file="Cimp.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        Cimp(i,:,:) = Cimp(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i-1)*dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,2,1), Cimp(i,2,2)
+    end do
+    close(11)
+    write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
+
+    ! PROJECTION FREE INPUTS
+    do a = 1,2   
+    do b = 1,2
+    do c = 1,2
+    do d = 1,2
+        write(F1name,'("F1_",4(i1),".out")') a,b,c,d
+        write(F2name,'("F2_",4(i1),".out")') a,b,c,d
+        write(K1name,'("K1_",4(i1),".out")') a,b,c,d
+        write(K3name,'("K3_",4(i1),".out")') a,b,c,d
+        open(11, file=F1name, action="write", status="unknown")
+        open(12, file=F2name, action="write", status="unknown")
+        open(13, file=K1name, action="write", status="unknown")
+        open(14, file=K3name, action="write", status="unknown")
+        do i = 1,tsteps+1
+            write(11,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+            dble(i-1)*dt, F1(i,a,b,c,d) / dble(ntraj)
+            write(12,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+            dble(i-1)*dt, F2(i,a,b,c,d) / dble(ntraj)
+            write(13,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+            dble(i-1)*dt, K1(i,a,b,c,d) / dble(ntraj)
+            write(14,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+            dble(i-1)*dt, K3(i,a,b,c,d) / dble(ntraj)
+        end do
+        close(11)
+        close(12)
+        close(13)
+        close(14)
+    end do
+    end do
+    end do
+    end do
+    write(6,"('- Saved projection free inputs to F1_abcd.out & F2_abcd.out')")
+    write(6,"('- Saved memory kernels to K1_abcd.out & K3_abcd.out')")
+
+end subroutine average_obs
+
+
+! Calculate and accumulate GQME projection free intputs
+subroutine proj_free_inputs(ts)
+
+    use variables
+    implicit none
+    integer :: a,b,c,d
+    integer, intent(in) :: ts
+
+    ! USE TIME 0 VALUES IF AT TIMESTEP 0 (FORTRAN: 0=1)
+    if ( ts == 1 ) then
+        G1_t = G1_0
+        pop_t(:) = pop_0(:)
+        Qop_t(:) = Qop_0(:)
+    end if
+
+    do a = 1,S
+        do b = 1,S
+            do c = 1,S
+                do d = 1,S
+                    if ( a /= b ) then
+                        if ( c == d ) then
+                            F1(ts,a,b,c,d) = F1(ts,a,b,c,d) + &
+                            (-1.d0)**(a-1) * (-1.d0)**(c-1) * 4.d0 * &
+                            pop_0(c) * eye * G2_0 * (epsilon + G1_t) * coh_t(b)
+
+                            F2(ts,a,b,c,d) = F2(ts,a,b,c,d) + &
+                            (-1.d0)**(a-1) * 2.d0 * &
+                            pop_0(c) * (epsilon + G1_t) * coh_t(b)
+
+                            K1(ts,a,b,c,d) = K1(ts,a,b,c,d) + &
+                            (-1.d0)**(a-1) * (-1.d0)**(c-1) * 4.d0 * &
+                            pop_0(c) * eye * G2_0 * G1_t * coh_t(b)
+
+                            K3(ts,a,b,c,d) = K3(ts,a,b,c,d) + &
+                            (-1.d0)**(c-1) * 2.d0 * pop_0(c) * &
+                            eye * G2_0 * coh_t(b)    
+                        else
+                            F1(ts,a,b,c,d) = F1(ts,a,b,c,d) + &
+                            (-1.d0)**(a-1) * (-1.d0)**(c-1) * 4.d0 * coh_0(c) *&
+                            (epsilon + G1_0) * (epsilon + G1_t) * coh_t(b)
+
+                            F2(ts,a,b,c,d) = F2(ts,a,b,c,d) + &
+                            (-1.d0)**(a-1) * 2.d0 * &
+                            coh_0(c) * (epsilon + G1_t) * coh_t(b)
+
+                            K1(ts,a,b,c,d) = K1(ts,a,b,c,d) + &
+                            (-1.d0)**(a-1) * (-1.d0)**(c-1) * 4.d0 * &
+                            coh_0(c) * G1_0 * G1_t * coh_t(b)
+
+                            K3(ts,a,b,c,d) = K3(ts,a,b,c,d) + &
+                            (-1.d0)**(c-1) * 2.d0 * coh_0(c) * &
+                            G1_0 * coh_t(b)
+                        end if
+                    else
+                        if ( c == d ) then
+                            K3(ts,a,b,c,d) = K3(ts,a,b,c,d) + &
+                            (-1.d0)**(c-1) * 2.d0 * pop_0(c) * &
+                            eye * G2_0 * pop_t(b)
+                        else 
+                            K3(ts,a,b,c,d) = K3(ts,a,b,c,d) + &
+                            (-1.d0)**(c-1) * 2.d0 * coh_0(c) * &
+                            G1_0 * pop_t(b)
+                        end if
+                    end if
+                end do
+            end do
+        end do
+    end do
+
+end subroutine
 
 ! Makes a single trajectory step using velocity verlet
 subroutine step_vverlet()
@@ -515,10 +753,10 @@ subroutine potential_force()
     V(2,2) = -epsilon
     G(:,:,:) = 0.d0
     do i = 1,F
-        V(1,1) = V(1,1) + c(i) * xn(i)
-        V(2,2) = V(2,2) - c(i) * xn(i)
-        G(i,1,1) = c(i)
-        G(i,2,2) = -c(i)
+        V(1,1) = V(1,1) + coeff(i) * xn(i)
+        V(2,2) = V(2,2) - coeff(i) * xn(i)
+        G(i,1,1) = coeff(i)
+        G(i,2,2) = -coeff(i)
     end do
 
     ! SHIFT TRACE OF V and G to V0 and G0
@@ -527,7 +765,7 @@ subroutine potential_force()
     do i = 1,S
         V(i,i) = V(i,i) - tr
     end do
-    
+
     do i = 1,F
         tr = trace(G(i,:,:),S)/dble(S)
         G0(i) = G0(i) + tr
@@ -537,81 +775,6 @@ subroutine potential_force()
     end do
 
 end subroutine potential_force
-
-
-! Accumulates observables
-subroutine accumulate_obs(ts)
-
-    use variables
-    implicit none
-    integer :: i,j
-    integer, intent(in) :: ts
-    double precision :: norm
-
-    ! TRADITIONAL POPULATION OPERATORS
-    if ( Aop == "seo" .and. Bop == "seo" ) then
-        norm = 16.d0
-    else if ( Aop == "wigner" .and. Bop == "wigner" ) then
-        write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
-                   "'wigner' does not make sense! At least one operator ",&
-                   "must be projected onto onto the SEO subspace!"
-        stop
-    else
-        norm = 4.d0
-    endif
-
-    do i = 1,S
-        do j = 1,S
-            Cpop(ts,i,j) = Cpop(ts,i,j) + norm * pop_0(i) * pop_t(j)
-        end do
-    end do
-
-    ! IMPROVED POPULATION OPERATORS
-    if ( electronic == "phi" ) then
-        norm = 4.d0
-    else if ( electronic == "phi2" ) then
-        norm = 16.d0
-    end if
-    do i = 1,S
-        do j = 1,S
-            Cimp(ts,i,j) = Cimp(ts,i,j) + &
-            ( S + norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / dble(S**2)
-        end do
-    end do    
-
-end subroutine accumulate_obs
-
-
-! Averages and outputs observable arrays
-subroutine average_obs()
-
-    use variables
-    implicit none
-    integer :: i,j,k
-
-    write(6,"(//'AVERAGING OBSERVABLES:')")
-
-    ! TRADITIONAL POPULATION OPERATORS
-    open(11, file="Cpop.out", action="write", status="unknown")
-    do i = 1,tsteps
-        Cpop(i,:,:) = Cpop(i,:,:) / dble(ntraj)
-        write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        dble(i)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
-    end do
-    close(11)
-    write(6,"('- Saved population autocorrelation functions to Cpop.out')")
-
-    ! IMPROVED POPULATION OPERATORS
-    open(11, file="Cimp.out", action="write", status="unknown")
-    do i = 1,tsteps
-        Cimp(i,:,:) = Cimp(i,:,:) / dble(ntraj)
-        write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        dble(i)*dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,2,1), Cimp(i,2,2)
-    end do
-    close(11)
-    write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
-
-end subroutine average_obs
 
 
 ! Returns two numbers sampled from the standard normal distribution

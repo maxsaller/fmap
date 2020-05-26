@@ -41,9 +41,11 @@ module variables
 
     ! BATH VARIABLES
     double precision, allocatable :: omega(:)   ! Bath frequencies
-    double precision, allocatable :: c(:)       ! Bath coupling coefficients
+    double precision, allocatable :: coeff(:)   ! Bath coupling coefficients
 
-    ! OBSERVABLES
+    ! POPULATION OPERATORS AND OBSERVABLES
+    double precision :: pop_norm                ! Normalization for trad. pops.
+    double precision :: imp_norm                ! Normalization for imp. ops.
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
     double precision, allocatable :: pop_t(:)   ! Time-t populations
     double precision, allocatable :: Qop_0(:)   ! Time-zero improved operator
@@ -61,5 +63,16 @@ module variables
     double precision :: t_traj                  ! Trajectory time
     double precision :: t_ops                   ! Operator calculation time
     double precision :: t_eom                   ! Equations of motion time
+
+    ! PROJECTION FREE INPUTS
+    double complex, allocatable :: F1(:,:,:,:,:)! F1 input
+    double complex, allocatable :: F2(:,:,:,:,:)! F2 input
+    double complex, allocatable :: K1(:,:,:,:,:)! K1 auxiliary kernel
+    double complex, allocatable :: K3(:,:,:,:,:)! K3 auxiliary kernel
+    double complex, allocatable :: coh_0(:)     ! Time-zero coherences
+    double complex, allocatable :: coh_t(:)     ! Time-t coherences
+    double precision :: G1_0                    ! T.-dep. bath input fns. t=0
+    double precision :: G1_t                    ! T.-dep. bath input fns. t=t
+    double precision :: G2_0                    ! T.-indep. bath input fns.
 
 end module variables
