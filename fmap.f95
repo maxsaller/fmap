@@ -6,12 +6,16 @@ program fmap
 
     use variables
     implicit none
-    integer :: t,ts,pctg
+    integer :: t,ts,pctg,id,i,count
     character(len=1) :: cr = char(13)
 
     ! HEADER
     write(6,"(a50,//,23x,a4,23x,//,2x,a46,2x,//,a50,/)") repeat("#",50),&
     "FMAP","Correlation functions via the mapping approach",repeat("#",50)
+
+    ! INITIALIZE RANDOM NUMBER GENERATOR FROM SYSTEM CLOCK
+    call system_clock(count)
+    call RLUXGO(4,count,0,0)
 
     ! READ INPUT FILE
     call read_input()
@@ -40,6 +44,7 @@ program fmap
 
         ! CALCULATE TIME ZERO OPERATORS
         call time_zero_ops()
+        call accumulate_obs(1)
 
         ! TRAJECTORY LOOP
         do ts = 1,tsteps
@@ -57,7 +62,7 @@ program fmap
 
             ! CALCULATE TIME t OPERATORS AND ACCUMULATE OBSERVABLES
             call time_t_ops()
-            call accumulate_obs(ts)
+            call accumulate_obs(ts+1)
 
         end do
 
@@ -95,6 +100,7 @@ subroutine read_input()
     read(11, *) dum, ntraj
     read(11, *) dum, tsteps
     read(11, *) dum, dt
+    read(11, *) dum, cavitysteps
     read(11, *) dum, intgt
     read(11, '(A)') dum
     read(11, *)
@@ -154,10 +160,25 @@ subroutine allocate_arrays()
     allocate( pop_t(S) )
     allocate( Qop_0(S) )
     allocate( Qop_t(S) )
-    allocate( Cpop(tsteps,S,S) )
-    allocate( Cimp(tsteps,S,S) )
+    allocate( SNP_pop(tsteps+1) )
+    allocate( SNP_imp(tsteps+1) )
+    allocate( Cpop(tsteps+1,S,S) )
+    allocate( Cimp(tsteps+1,S,S) )
+    allocate( NP_pop(tsteps+1,F) )
+    allocate( NP_imp(tsteps+1,F) )
+    allocate( zeta(cavitysteps+1, F) )
+    allocate( I_pop(tsteps/100 + 1,cavitysteps+1) )
+    allocate( I_imp(tsteps/100 + 1,cavitysteps+1) )
+
+    SNP_imp(:) = 0.d0
+    SNP_pop(:) = 0.d0
+    I_pop(:,:) = 0.d0
+    I_imp(:,:) = 0.d0
     Cpop(:,:,:) = 0.d0
     Cimp(:,:,:) = 0.d0
+    NP_pop(:,:) = 0.d0
+    NP_imp(:,:) = 0.d0
+
 
 end subroutine allocate_arrays
 
@@ -189,12 +210,19 @@ subroutine deallocate_arrays()
     deallocate( G0 )
 
     ! OBSERVABLE ARRAYS
+    deallocate( zeta )
     deallocate( Cpop )
     deallocate( Cimp )
     deallocate( pop_0 )
     deallocate( pop_t )
     deallocate( Qop_0 )
     deallocate( Qop_t )
+    deallocate( I_pop )
+    deallocate( I_imp )
+    deallocate( NP_pop )
+    deallocate( NP_imp )
+    deallocate( SNP_pop )
+    deallocate( SNP_imp )
 
 end subroutine deallocate_arrays
 
@@ -204,19 +232,31 @@ subroutine system_bath_properties()
 
     use variables
     implicit none
-    integer :: i
+    integer :: i,j
+    double precision :: r, z
 
     mu     = 1.034d0
     eps(1) = -0.6738d0
     eps(2) = -0.2798d0 
     L      = 236215.76557822127d0
+    
+    open(11, file="freq.out", status="unknown", action="write")
 
     do i = 1,F
         omega(i) = pi * sol * dble(2 * i - 1) / L
         c(i) = mu * omega(i) * 0.0103d0 * (-1)**(i+1)
+        do j = 1, cavitysteps+1
+            r = (j-1)*L/dble(cavitysteps)
+            z = sqrt(omega(i) / L) * sin(pi * dble(2 * i - 1) * r / L)
+            zeta(j,i) = z * z
+        end do 
+        write(11, *) omega(i)
     end do
 
+    close(11)
+
 end subroutine system_bath_properties
+
 
 ! Samples nuclear positions and momenta
 subroutine sample_nuclear()
@@ -337,6 +377,143 @@ subroutine time_t_ops()
     end do
 
 end subroutine time_t_ops
+
+
+! Accumulates observables
+subroutine accumulate_obs(ts)
+
+    use variables
+    implicit none
+    integer :: i,j,t
+    integer, intent(in) :: ts
+    double precision :: norm, zpe
+
+    ! TIME ZERO OBSERVABLES
+    if ( ts == 1 ) then
+        pop_t(:) = pop_0(:)
+        Qop_t(:) = Qop_0(:)
+    end if
+
+    if ( Bop == "seo" ) then
+        zpe = 0.5d0
+    else if ( Bop == "wigner" ) then
+        zpe = 1.d0
+    end if
+
+    ! TRADITIONAL POPULATION OPERATORS
+    if ( Aop == "seo" .and. Bop == "seo" ) then
+        norm = 16.d0
+    else if ( Aop == "wigner" .and. Bop == "wigner" ) then
+        write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
+                   "'wigner' does not make sense! At least one operator ",&
+                   "must be projected onto onto the SEO subspace!"
+        stop
+    else
+        norm = 4.d0
+    endif
+
+    do i = 1,S
+        do j = 1,S
+            Cpop(ts,i,j) = Cpop(ts,i,j) + norm * pop_0(i) * pop_t(j)
+        end do
+    end do
+
+    ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) TRADITIONAL OPERATORS
+    do i = 1,F
+        NP_pop(ts,i) = NP_pop(ts,i) + norm * pop_0(2) * 0.5 * &
+                       ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
+    end do
+
+    ! CAVITY INTENSITY TRADITIONAL OPERATORS
+    if ( ts == 1 .or. ( mod(ts-1, 100) == 0 ) ) then
+        t = (ts-1)/100 + 1
+        do i = 1, cavitysteps+1
+            I_pop(t, i) = I_pop(t, i) + (norm * pop_0(2) * &
+                          0.5d0 * sum( XE*XE + PE*PE - zpe ) * &
+                          ( 2.d0 * sum(omega*zeta(i,:)*xn*xn) - sum(zeta(i,:))))
+        end do
+    end if
+
+    ! IMPROVED POPULATION OPERATORS
+    if ( electronic == "phi" ) then
+        norm = 4.d0
+    else if ( electronic == "phi2" ) then
+        norm = 16.d0
+    end if
+    do i = 1,S
+        do j = 1,S
+            Cimp(ts,i,j) = Cimp(ts,i,j) + &
+            ( S + norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / dble(S**2)
+        end do
+    end do
+
+    ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) IMPROVED OPERATORS
+    do i = 1,F
+        NP_imp(ts,i) = NP_imp(ts,i) + &
+                       ( 1.d0 + norm * Qop_0(2) )/dble(S) * &
+                       0.5 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
+    end do
+
+end subroutine accumulate_obs
+
+
+! Averages and outputs observable arrays
+subroutine average_obs()
+
+    use variables
+    implicit none
+    integer :: i,j,k
+
+    write(6,"(//'AVERAGING OBSERVABLES:')")
+
+    ! TRADITIONAL POPULATION OPERATORS
+    open(11, file="Cpop.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        Cpop(i,:,:) = Cpop(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i-1)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
+    end do
+    close(11)
+    write(6,"('- Saved population autocorrelation functions to Cpop.out')")
+
+    ! IMPROVED POPULATION OPERATORS
+    open(11, file="Cimp.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        Cimp(i,:,:) = Cimp(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i-1)*dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,2,1), Cimp(i,2,2)
+    end do
+    close(11)
+    write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
+
+    ! NUMBER OF PHOTONS
+    SNP_pop(:) = sum(NP_pop, 2)
+    open(11, file="Nph_pop.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        write(11, '(F10.4,2x,201(ES13.5,2x))') dble(i-1) * dt, &
+        SNP_pop(i)/dble(ntraj), (NP_pop(i,j)/dble(ntraj),j=1,F)
+    end do
+    close(11)
+    SNP_imp(:) = sum(NP_imp, 2)
+    open(11, file="Nph_imp.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        write(11, '(F10.4,2x,201(ES13.5,2x))') dble(i-1) * dt, &
+        SNP_imp(i)/dble(ntraj), (NP_imp(i,j)/dble(ntraj),j=1,F)
+    end do
+    close(11)
+    write(6,"('- Saved number of photons to Nph_pop.out and Nph_imp.out')")
+
+    ! CAVITY INTENSITY
+    open(11, file="I_pop.out", action="write", status="unknown")
+    do i = 1,tsteps/100 + 1
+        write(11, '(F10.4,2x,101(ES13.5,2x))') dble(i-1) * dt, &
+        (I_pop(i,j)/dble(ntraj),j=1,cavitysteps+1)
+    end do
+    close(11)
+    write(6,"('- Saved cavity intensity to I_pop.out')")
+
+
+end subroutine average_obs
 
 
 ! Makes a single trajectory step using velocity verlet
@@ -470,81 +647,6 @@ subroutine potential_force()
     end do
 
 end subroutine potential_force
-
-
-! Accumulates observables
-subroutine accumulate_obs(ts)
-
-    use variables
-    implicit none
-    integer :: i,j
-    integer, intent(in) :: ts
-    double precision :: norm
-
-    ! TRADITIONAL POPULATION OPERATORS
-    if ( Aop == "seo" .and. Bop == "seo" ) then
-        norm = 16.d0
-    else if ( Aop == "wigner" .and. Bop == "wigner" ) then
-        write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
-                   "'wigner' does not make sense! At least one operator ",&
-                   "must be projected onto onto the SEO subspace!"
-        stop
-    else
-        norm = 4.d0
-    endif
-
-    do i = 1,S
-        do j = 1,S
-            Cpop(ts,i,j) = Cpop(ts,i,j) + norm * pop_0(i) * pop_t(j)
-        end do
-    end do
-
-    ! IMPROVED POPULATION OPERATORS
-    if ( electronic == "phi" ) then
-        norm = 4.d0
-    else if ( electronic == "phi2" ) then
-        norm = 16.d0
-    end if
-    do i = 1,S
-        do j = 1,S
-            Cimp(ts,i,j) = Cimp(ts,i,j) + &
-            ( S + norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / dble(S**2)
-        end do
-    end do    
-
-end subroutine accumulate_obs
-
-
-! Averages and outputs observable arrays
-subroutine average_obs()
-
-    use variables
-    implicit none
-    integer :: i,j,k
-
-    write(6,"(//'AVERAGING OBSERVABLES:')")
-
-    ! TRADITIONAL POPULATION OPERATORS
-    open(11, file="Cpop.out", action="write", status="unknown")
-    do i = 1,tsteps
-        Cpop(i,:,:) = Cpop(i,:,:) / dble(ntraj)
-        write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        dble(i)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
-    end do
-    close(11)
-    write(6,"('- Saved population autocorrelation functions to Cpop.out')")
-
-    ! IMPROVED POPULATION OPERATORS
-    open(11, file="Cimp.out", action="write", status="unknown")
-    do i = 1,tsteps
-        Cimp(i,:,:) = Cimp(i,:,:) / dble(ntraj)
-        write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        dble(i)*dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,2,1), Cimp(i,2,2)
-    end do
-    close(11)
-    write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
-
-end subroutine average_obs
 
 
 ! Returns two numbers sampled from the standard normal distribution

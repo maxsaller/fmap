@@ -1,7 +1,7 @@
 FLAGS=-fopenmp
-LAPACK=/usr/lib/liblapack.so
+LAPACK=-llapack
 PLOT="set xrange [-100:2300];
-PLOT+=set term qt size 1500,500;	
+PLOT+=set term x11 size 1500,500;	
 PLOT+=p 'exact' u 1:2 w l lc 'black' lw 2 title 'Exact', 
 PLOT+='exact' u 1:3 w l lc 'black' dt 2 lw 2 notitle, 
 PLOT+='Cpop.out' u 1:4 w l lc 'blue' lw 2 dt 2 notitle, 

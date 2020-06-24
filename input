@@ -4,9 +4,10 @@ field_modes             200
 ==============================
 
 === convergence parameters ===
-num_of_trajectories     100000
+num_of_trajectories     10000
 num_of_time-steps       21000
 time-step_duration      0.1
+cavity_steps            100
 integrator_type         diag
 ==============================
 

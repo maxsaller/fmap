@@ -6,4 +6,5 @@
 *.log
 dat_*
 test.*
-plot.py
+run
+run/*

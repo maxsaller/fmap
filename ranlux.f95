@@ -118,7 +118,8 @@ SUBROUTINE RANLUX(RVEC,LENV)
       RETURN 
 
       ! Entry to input and float integer seeds from previous run 
-      ENTRY RLUXIN(ISDEXT) 
+      ENTRY RLUXIN(ISDEXT)
+         OPEN(99, FILE="ranlux.log", ACTION="WRITE", STATUS="UNKNOWN") 
          TWOM24 = 1. 
          DO 195 I= 1, 24 
          NEXT(I) = I-1 
@@ -158,6 +159,7 @@ SUBROUTINE RANLUX(RVEC,LENV)
 
       ! Entry to ouput seeds as integers
       ENTRY RLUXUT(ISDEXT)
+      OPEN(99, FILE="ranlux.log", ACTION="WRITE", STATUS="UNKNOWN")
       DO 300 I= 1, 24
          ISDEXT(I) = INT(SEEDS(I)*TWOP12*TWOP12)
   300 CONTINUE
@@ -167,6 +169,7 @@ SUBROUTINE RANLUX(RVEC,LENV)
 
       ! Entry to output the "convenient" restart point
       ENTRY RLUXAT(LOUT,INOUT,K1,K2)
+      OPEN(99, FILE="ranlux.log", ACTION="WRITE", STATUS="UNKNOWN")
       LOUT = LUXLEV
       INOUT = INSEED
       K1 = KOUNT
@@ -175,6 +178,7 @@ SUBROUTINE RANLUX(RVEC,LENV)
 
       ! Entry to initialize from one or three integers
       ENTRY RLUXGO(LUX,INS,K1,K2)
+         OPEN(99, FILE="ranlux.log", ACTION="WRITE", STATUS="UNKNOWN")
          IF (LUX .LT. 0) THEN
             LUXLEV = LXDFLT
          ELSE IF (LUX .LE. MAXLEV) THEN
