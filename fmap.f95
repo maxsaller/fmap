@@ -130,10 +130,11 @@ subroutine allocate_arrays()
 
     use variables
     implicit none
+    double precision :: evec(S,S), eval(S)
 
     ! LAPACK WORK ARRAY
     allocate( work(1) )
-    call dsyev("V", "U", S, 0.d0, S, 0.d0, work, -1, info)
+    call dsyev("V", "U", S, evec, S, eval, work, -1, info)
     lenwork = int(work(1))
     deallocate(work)
     allocate( work(lenwork) )
