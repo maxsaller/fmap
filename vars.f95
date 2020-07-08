@@ -43,6 +43,7 @@ module variables
     double precision, allocatable :: c(:)       ! Electron-phonon couplings
 
     ! POPULATION OBSERVABLES
+    double precision :: I_0                     ! Time-zero identity
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
     double precision, allocatable :: pop_t(:)   ! Time-t populations
     double precision, allocatable :: Qop_0(:)   ! Time-zero improved operator

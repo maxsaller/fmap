@@ -4,6 +4,7 @@
 *.dat
 *.out
 *.log
+*.mp4
 dat_*
 test.*
 run

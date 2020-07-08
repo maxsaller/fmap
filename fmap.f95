@@ -234,7 +234,7 @@ subroutine system_bath_properties()
     use variables
     implicit none
     integer :: i,j
-    double precision :: r, z
+    double precision :: z
 
     mu     = 1.034d0
     eps(1) = -0.6738d0
@@ -247,8 +247,8 @@ subroutine system_bath_properties()
         omega(i) = pi * sol * dble(2 * i - 1) / L
         c(i) = mu * omega(i) * 0.0103d0 * (-1)**(i+1)
         do j = 1, cavitysteps+1
-            r = (j-1)*L/dble(cavitysteps)
-            z = sqrt(omega(i) / L) * sin(pi * dble(2 * i - 1) * r / L)
+            z = sqrt(omega(i)) * 0.0103d0 * &
+                sin( pi * dble(2 * i - 1) * (j-1) / cavitysteps )
             zeta(j,i) = z * z
         end do 
         write(11, *) omega(i)
@@ -328,8 +328,10 @@ subroutine time_zero_ops()
         stop
     end if
 
+    I_0 = 0.d0
     do i = 1,S
         pop_0(i) = 0.5d0 * ( XE(i)**2 + PE(i)**2 - zpe )
+        I_0 = I_0 + pop_0(i)
     end do
 
     ! IMPROVED POPULATION OPERATORS
@@ -387,18 +389,12 @@ subroutine accumulate_obs(ts)
     implicit none
     integer :: i,j,t
     integer, intent(in) :: ts
-    double precision :: norm, zpe
+    double precision :: norm, NQ1, NQ2, NQ1Q1, NQ1Q2, NQ2Q1, NQ2Q2
 
     ! TIME ZERO OBSERVABLES
     if ( ts == 1 ) then
         pop_t(:) = pop_0(:)
         Qop_t(:) = Qop_0(:)
-    end if
-
-    if ( Bop == "seo" ) then
-        zpe = 0.5d0
-    else if ( Bop == "wigner" ) then
-        zpe = 1.d0
     end if
 
     ! TRADITIONAL POPULATION OPERATORS
@@ -413,25 +409,29 @@ subroutine accumulate_obs(ts)
         norm = 4.d0
     endif
 
-    do i = 1,S
-        do j = 1,S
-            Cpop(ts,i,j) = Cpop(ts,i,j) + norm * pop_0(i) * pop_t(j)
-        end do
-    end do
+    Cpop(ts,1,1) = Cpop(ts,1,1) + norm * 1/sqrt(2.d0)*(pop_0(2) + pop_0(1)) * &
+                   1/sqrt(2.d0)*(pop_t(2) + pop_t(1))
+    Cpop(ts,1,2) = Cpop(ts,1,2) + norm * 1/sqrt(2.d0)*(pop_0(2) + pop_0(1)) * &
+                   1/sqrt(2.d0)*(pop_t(2) - pop_t(1))
+
+    Cpop(ts,2,1) = Cpop(ts,2,1) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
+                   1/sqrt(2.d0)*(pop_t(2) + pop_t(1))
+    Cpop(ts,2,2) = Cpop(ts,2,2) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
+                   1/sqrt(2.d0)*(pop_t(2) - pop_t(1))
 
     ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) TRADITIONAL OPERATORS
     do i = 1,F
-        NP_pop(ts,i) = NP_pop(ts,i) + norm * pop_0(2) * 0.5 * &
-                       ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
+        NP_pop(ts,i) = NP_pop(ts,i) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
+                       0.5d0 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
     end do
 
     ! CAVITY INTENSITY TRADITIONAL OPERATORS
     if ( ts == 1 .or. ( mod(ts-1, 100) == 0 ) ) then
         t = (ts-1)/100 + 1
         do i = 1, cavitysteps+1
-            I_pop(t, i) = I_pop(t, i) + (norm * pop_0(2) * &
-                          0.5d0 * sum( XE*XE + PE*PE - zpe ) * &
-                          ( 2.d0 * sum(omega*zeta(i,:)*xn*xn) - sum(zeta(i,:))))
+            I_pop(t, i) = I_pop(t, i) + (norm * I_0 * &
+                          1/sqrt(2.d0) * (pop_0(2) - pop_0(1)) * &
+                          ( 2.d0 * sum( omega * zeta(i,:) * xn * xn) - sum(zeta(i,:) ) ))
         end do
     end if
 
@@ -441,17 +441,35 @@ subroutine accumulate_obs(ts)
     else if ( electronic == "phi2" ) then
         norm = 16.d0
     end if
-    do i = 1,S
-        do j = 1,S
-            Cimp(ts,i,j) = Cimp(ts,i,j) + &
-            ( S + norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / dble(S**2)
-        end do
-    end do
+    
+    NQ1 = norm * Qop_t(1)
+    NQ2 = norm * Qop_t(2)
+    NQ1Q1 = norm * Qop_0(1)*Qop_t(1)
+    NQ1Q2 = norm * Qop_0(1)*Qop_t(2)
+    NQ2Q1 = norm * Qop_0(2)*Qop_t(1)
+    NQ2Q2 = norm * Qop_0(2)*Qop_t(2)
+    
+    Cimp(ts,1,1) = Cimp(ts,1,1) + 1/sqrt(2.d0)/(S**2) * (&
+            ( S + NQ2 + NQ2Q2 ) + ( S + NQ1 + NQ2Q1 ) + &
+            ( S + NQ2 + NQ1Q2 ) + ( S + NQ1 + NQ1Q1 ) )
+    
+    Cimp(ts,1,2) = Cimp(ts,1,2) + 1/sqrt(2.d0)/(S**2) * (&
+            ( S + NQ2 + NQ2Q2 ) - ( S + NQ1 + NQ2Q1 ) + &
+            ( S + NQ2 + NQ1Q2 ) - ( S + NQ1 + NQ1Q1 ) )
+    
+    Cimp(ts,2,1) = Cimp(ts,2,1) + 1/sqrt(2.d0)/(S**2) * (&
+            ( S + NQ2 + NQ2Q2 ) + ( S + NQ1 + NQ2Q1 ) - &
+            ( S + NQ2 + NQ1Q2 ) - ( S + NQ1 + NQ1Q1 ) )
+    
+    Cimp(ts,2,2) = Cimp(ts,2,2) + 1/sqrt(2.d0)/(S**2) * (&
+            ( S + NQ2 + NQ2Q2 ) - ( S + NQ1 + NQ2Q1 ) - &
+            ( S + NQ2 + NQ1Q2 ) + ( S + NQ1 + NQ1Q1 ) )
 
     ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) IMPROVED OPERATORS
     do i = 1,F
-        NP_imp(ts,i) = NP_imp(ts,i) + &
-                       ( 1.d0 + norm * Qop_0(2) )/dble(S) * &
+        NP_imp(ts,i) = NP_imp(ts,i) + 1/sqrt(2.d0) * (&
+                       ( 1.d0 + norm * Qop_0(2) )/dble(S) - &
+                       ( 1.d0 + norm * Qop_0(1) )/dble(S) )* &
                        0.5 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
     end do
 
@@ -507,7 +525,7 @@ subroutine average_obs()
     ! CAVITY INTENSITY
     open(11, file="I_pop.out", action="write", status="unknown")
     do i = 1,tsteps/100 + 1
-        write(11, '(F10.4,2x,101(ES13.5,2x))') dble(i-1) * dt, &
+        write(11, '(F10.4,2x,1001(ES13.5,2x))') dble(i-1) * dt, &
         (I_pop(i,j)/dble(ntraj),j=1,cavitysteps+1)
     end do
     close(11)
