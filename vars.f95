@@ -3,19 +3,22 @@ module variables
     implicit none
 
     ! CONSTANTS
-    double complex, parameter :: eye = dcmplx(0.d0, 1.d0)
-    double precision, parameter :: pi = 3.14159265359d0
-    double precision, parameter :: sol = 137.03599908381668d0
+    integer, parameter :: S = 2                              ! # of el.st.
+    double complex, parameter :: eye = dcmplx(0.d0, 1.d0)    ! Complex i
+    double precision, parameter :: pi = 3.14159265359d0      ! Pie is delicious
+    double precision, parameter :: sol = 137.03599908381668d0! Speed of light
+    double precision, parameter :: eps0 = 0.079577471546d0   ! Vacuum permittivity
 
     ! PARALLEL PARAMETERS
     integer :: threads                          ! Number of max OMP threads
 
     ! INPUT PARAMETERS
     integer :: F                                ! Nuclear DoFs
-    integer :: S                                ! Electronic states
     integer :: ntraj                            ! Number of trajectories
     integer :: tsteps                           ! Number of time-steps
     integer :: cavitysteps                      ! Number of cavity spatial steps
+    double precision :: epsilon                 ! Energy bias
+    double precision :: coupling                ! Coupling matrix element
     double precision :: dt                      ! Time-step duration
     character(len=6) :: Aop                     ! Electronic sampling type
     character(len=6) :: Bop                     ! Electronic sampling type
@@ -43,22 +46,12 @@ module variables
     double precision, allocatable :: c(:)       ! Electron-phonon couplings
 
     ! POPULATION OBSERVABLES
-    double precision :: I_0                     ! Time-zero identity
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
     double precision, allocatable :: pop_t(:)   ! Time-t populations
-    double precision, allocatable :: Qop_0(:)   ! Time-zero improved operator
-    double precision, allocatable :: Qop_t(:)   ! Time-t improved operator
-    double precision, allocatable :: Cpop(:,:,:)! Population correlation fn.
-    double precision, allocatable :: Cimp(:,:,:)! Improved operator corr. fn.
+    double precision, allocatable :: Cpop(:,:,:)! Population CF
+    !double precision, allocatable :: Cmix(:,:,:)! Mixed population CF
 
     ! BATH OBSERVABLES
-    double precision, allocatable :: zeta(:,:)  ! Utility array for intensity
-    double precision, allocatable :: I_pop(:,:) ! Cavity intensity traditional
-    double precision, allocatable :: I_imp(:,:) ! Cavity intensity improved
-    double precision, allocatable :: NP_pop(:,:)! Number of photons per mode trad.
-    double precision, allocatable :: NP_imp(:,:)! Number of photons per mode impr.
-    double precision, allocatable :: SNP_pop(:) ! Total number of photons trad.
-    double precision, allocatable :: SNP_imp(:) ! Total number of photons impr.
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
