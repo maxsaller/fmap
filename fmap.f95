@@ -576,7 +576,7 @@ subroutine potential_force()
     V(2,1) = coupling
     do i = 1,F
         V(1,1) = V(1,1) + c(i) * xn(i)
-        V(2,2) = V(2,2) + c(i) * xn(i)
+        V(2,2) = V(2,2) - c(i) * xn(i)
     end do
 
     ! SHIFT TRACE OF V. NOTE THAT G IS ALREADY TRACELESS
