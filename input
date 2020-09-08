@@ -14,6 +14,6 @@ integrator_type         diag
 
 ===== method parameters ======
 A-operator_type_C_AB    seo
-B-operator_type_C_AB    wigner
-electronic_sampling     phi
+B-operator_type_C_AB    seo
+electronic_sampling     phi2
 ==============================

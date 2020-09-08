@@ -46,10 +46,14 @@ module variables
     double precision, allocatable :: c(:)       ! Electron-phonon couplings
 
     ! POPULATION OBSERVABLES
-    double precision, allocatable :: pop_0(:)   ! Time-zero populations
-    double precision, allocatable :: pop_t(:)   ! Time-t populations
-    double precision, allocatable :: Cpop(:,:,:)! Population CF
-    !double precision, allocatable :: Cmix(:,:,:)! Mixed population CF
+    double precision, allocatable :: pop_0(:)    ! Time-zero populations
+    double precision, allocatable :: pop_t(:)    ! Time-t populations
+    double precision, allocatable :: Qop_0(:)    ! Time-zero TL operators
+    double precision, allocatable :: Qop_t(:)    ! Time-t TL operators
+    double precision, allocatable :: Cpop(:,:,:) ! Population CF
+    double precision, allocatable :: CIQn(:,:)   ! Improved population CF
+    double precision, allocatable :: CQmQn(:,:,:)! Improved population CF
+    double precision, allocatable :: Cimp(:,:,:) ! Improved population CF
 
     ! BATH OBSERVABLES
 

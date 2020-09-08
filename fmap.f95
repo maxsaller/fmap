@@ -158,12 +158,18 @@ subroutine allocate_arrays()
     ! OBSERVABLE ARRAYS
     allocate( pop_0(S) )
     allocate( pop_t(S) )
+    allocate( Qop_0(S) )
+    allocate( Qop_t(S) )
     allocate( Cpop(tsteps+1, S, S) )
-    ! allocate( Cmix(tsteps+1, S, S) )
+    allocate( CIQn(tsteps+1, S) )
+    allocate( CQmQn(tsteps+1, S, S) )
+    allocate( Cimp(tsteps+1, S, S) )
 
     ! ZEROING
     Cpop(:,:,:) = 0.d0
-    ! Cmix(:,:,:) = 0.d0
+    CIQn(:,:) = 0.d0
+    CQmQn(:,:,:) = 0.d0
+    Cimp(:,:,:) = 0.d0
 
 end subroutine allocate_arrays
 
@@ -191,9 +197,13 @@ subroutine deallocate_arrays()
 
     ! OBSERVABLE ARRAYS
     deallocate( Cpop )
-    ! deallocate( Cmix )
+    deallocate( CIQn )
+    deallocate( CQmQn )
+    deallocate( Cimp )
     deallocate( pop_0 )
     deallocate( pop_t )
+    deallocate( Qop_0 )
+    deallocate( Qop_t )
 
 end subroutine deallocate_arrays
 
@@ -206,9 +216,9 @@ subroutine system_bath_properties()
     integer :: i,j
     double precision :: d
 
-    mu     = 1.d9
+    mu     = 5.d8
     L      = 5.d4
-    d      = 1.d-6 * L
+    d      = L/2.d0
     !L      = 236215.76557822127d0
     
     open(11, file="freq.out", status="unknown", action="write")
@@ -298,6 +308,15 @@ subroutine time_zero_ops()
         pop_0(i) = 0.5d0 * ( XE(i)**2 + PE(i)**2 - zpe )
     end do
 
+    do i = 1, S
+        Qop_0(i) = 0.5d0 * (S-1) * ( XE(i)**2 + PE(i)**2 )
+        do j = 1, S
+            if ( j /= i ) then
+                Qop_0(i) = Qop_0(i)  - (0.5d0 * ( XE(j)**2 + PE(j)**2 ))
+            end if
+        end do
+    end do
+
 end subroutine time_zero_ops
 
 
@@ -321,6 +340,15 @@ subroutine time_t_ops()
 
     do i = 1,S
         pop_t(i) = 0.5d0 * ( XE(i)**2 + PE(i)**2 - zpe )
+    end do
+
+    do i = 1, S
+        Qop_t(i) = 0.5d0 * (S-1) * ( XE(i)**2 + PE(i)**2 )
+        do j = 1, S
+            if ( j /= i ) then
+                Qop_t(i) = Qop_t(i)  - (0.5d0 * ( XE(j)**2 + PE(j)**2 ))
+            end if
+        end do
     end do
 
 end subroutine time_t_ops
@@ -354,18 +382,20 @@ subroutine accumulate_obs(ts)
         end do
     end do
 
-    ! ! MIXED POPULATION CF
-    ! Cmix(ts,1,1) = Cmix(ts,1,1) + norm * 0.5d0 * &
-    !                (pop_0(1) + pop_0(2)) * (pop_t(1) + pop_t(2))
-    
-    ! Cmix(ts,1,2) = Cmix(ts,1,2) + norm * 0.5d0 * &
-    !                (pop_0(1) + pop_0(2)) * (pop_t(2) - pop_t(1))
-    
-    ! Cmix(ts,2,1) = Cmix(ts,2,1) + norm * 0.5d0 * &
-    !                (pop_0(2) - pop_0(1)) * (pop_t(1) + pop_t(2))
-    
-    ! Cmix(ts,2,2) = Cmix(ts,2,2) + norm * 0.5d0 * &
-    !                (pop_0(2) - pop_0(1)) * (pop_t(2) - pop_t(1))
+    ! IMPROVED POPULATION CF
+    do i = 1, S
+        CIQn(ts,i) = CIQn(ts,i) + norm * Qop_t(i)
+        do j = 1, S
+            CQmQn(ts,i,j) = CQmQn(ts,i,j) + norm * Qop_0(i) * Qop_t(j)
+        end do
+    end do
+
+    do i = 1, S
+        do j = 1, S
+            Cimp(ts,i,j) = Cimp(ts,i,j) + ( S + norm * Qop_t(j) + &
+                           norm * Qop_0(i) * Qop_t(j) ) / dble(S*S)
+        end do
+    end do
 
 
 end subroutine accumulate_obs
@@ -391,15 +421,35 @@ subroutine average_obs()
     write(6,*) "- Wrote population autocorrelation functions to Cpop.out"
     close(11)
 
-    ! open(11, file="Cmix.out", status="unknown", action="write")
-    ! write(fmt,*) "(f10.4,4(2x,ES13.5))"
-    ! Cmix(:,:,:) = Cmix(:,:,:)/dble(ntraj)
-    ! do i = 1, tsteps+1
-    !     write(11,fmt) (i-1) * dt, Cmix(i,1,1), Cmix(i,1,2), &
-    !                               Cmix(i,2,1), Cmix(i,2,2)
-    ! end do
-    ! write(6,*) "- Wrote mixed population autocorrelation functions to Cmix.out"
-    ! close(11)
+    open(11, file="Cimp.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    Cimp(:,:,:) = Cimp(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, Cimp(i,1,1), Cimp(i,1,2), &
+                                  Cimp(i,2,1), Cimp(i,2,2)
+    end do
+    write(6,*) "- Wrote improved population operator ACFs to Cimp.out"
+    close(11)
+
+    open(11, file="CIQn.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,2(2x,ES13.5))"
+    CIQn(:,:) = CIQn(:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, CIQn(i,1), CIQn(i,2)
+    end do
+    write(6,*) "- Wrote improved population operator CIQn to CIQn.out"
+    close(11)
+
+    open(11, file="CQmQn.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    CQmQn(:,:,:) = CQmQn(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, CQmQn(i,1,1), CQmQn(i,1,2), &
+                                  CQmQn(i,2,1), CQmQn(i,2,2)
+    end do
+    write(6,*) "- Wrote improved population operator CQmQn to CQmQn.out"
+    close(11)
+
 
 
 end subroutine average_obs
