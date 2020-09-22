@@ -216,7 +216,7 @@ subroutine system_bath_properties()
     integer :: i,j
     double precision :: d
 
-    mu     = 5.d8
+    mu     = 3.d0
     L      = 5.d4
     d      = L/2.d0
     !L      = 236215.76557822127d0
@@ -224,9 +224,13 @@ subroutine system_bath_properties()
     open(11, file="freq.out", status="unknown", action="write")
 
     do i = 1,F
-        !omega(i) = pi * sol * dble(2 * i - 1) / L
-        omega(i) = pi * sol * dble(i) / L
-        c(i) = mu * omega(i) * dsqrt(2.d0/eps0/L) * sin(omega(i)/sol * d)
+        if ( d == L/2.d0 ) then
+            omega(i) = pi * sol * dble(2 * i - 1) / L
+            c(i) = mu * omega(i) * dsqrt(2.d0/eps0/L) * (-1.d0)**(i+1)
+        else
+            omega(i) = pi * sol * dble(i) / L
+            c(i) = mu * omega(i) * dsqrt(2.d0/eps0/L) * sin(omega(i)/sol * d)
+        end if
         write(11, *) omega(i), c(i)
     end do
 
