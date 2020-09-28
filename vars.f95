@@ -43,22 +43,24 @@ module variables
     double precision, allocatable :: c(:)       ! Electron-phonon couplings
 
     ! POPULATION OBSERVABLES
-    double precision :: I_0                     ! Time-zero identity
+    ! double precision :: I_0                     ! Time-zero identity
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
     double precision, allocatable :: pop_t(:)   ! Time-t populations
     double precision, allocatable :: Qop_0(:)   ! Time-zero improved operator
     double precision, allocatable :: Qop_t(:)   ! Time-t improved operator
     double precision, allocatable :: Cpop(:,:,:)! Population correlation fn.
     double precision, allocatable :: Cimp(:,:,:)! Improved operator corr. fn.
+    double precision, allocatable :: CIQn(:,:)   ! Improved population CF
+    double precision, allocatable :: CQmQn(:,:,:)! Improved population CF
 
     ! BATH OBSERVABLES
-    double precision, allocatable :: zeta(:,:)  ! Utility array for intensity
-    double precision, allocatable :: I_pop(:,:) ! Cavity intensity traditional
-    double precision, allocatable :: I_imp(:,:) ! Cavity intensity improved
-    double precision, allocatable :: NP_pop(:,:)! Number of photons per mode trad.
-    double precision, allocatable :: NP_imp(:,:)! Number of photons per mode impr.
-    double precision, allocatable :: SNP_pop(:) ! Total number of photons trad.
-    double precision, allocatable :: SNP_imp(:) ! Total number of photons impr.
+    ! double precision, allocatable :: zeta(:,:)  ! Utility array for intensity
+    ! double precision, allocatable :: I_pop(:,:) ! Cavity intensity traditional
+    ! double precision, allocatable :: I_imp(:,:) ! Cavity intensity improved
+    ! double precision, allocatable :: NP_pop(:,:)! Number of photons per mode trad.
+    ! double precision, allocatable :: NP_imp(:,:)! Number of photons per mode impr.
+    ! double precision, allocatable :: SNP_pop(:) ! Total number of photons trad.
+    ! double precision, allocatable :: SNP_imp(:) ! Total number of photons impr.
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK

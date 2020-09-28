@@ -161,24 +161,28 @@ subroutine allocate_arrays()
     allocate( pop_t(S) )
     allocate( Qop_0(S) )
     allocate( Qop_t(S) )
-    allocate( SNP_pop(tsteps+1) )
-    allocate( SNP_imp(tsteps+1) )
+    ! allocate( SNP_pop(tsteps+1) )
+    ! allocate( SNP_imp(tsteps+1) )
     allocate( Cpop(tsteps+1,S,S) )
     allocate( Cimp(tsteps+1,S,S) )
-    allocate( NP_pop(tsteps+1,F) )
-    allocate( NP_imp(tsteps+1,F) )
-    allocate( zeta(cavitysteps+1, F) )
-    allocate( I_pop(tsteps/100 + 1,cavitysteps+1) )
-    allocate( I_imp(tsteps/100 + 1,cavitysteps+1) )
+    allocate( CIQn(tsteps+1, S) )
+    allocate( CQmQn(tsteps+1, S, S) )
+    ! allocate( NP_pop(tsteps+1,F) )
+    ! allocate( NP_imp(tsteps+1,F) )
+    ! allocate( zeta(cavitysteps+1, F) )
+    ! allocate( I_pop(tsteps/100 + 1,cavitysteps+1) )
+    ! allocate( I_imp(tsteps/100 + 1,cavitysteps+1) )
 
-    SNP_imp(:) = 0.d0
-    SNP_pop(:) = 0.d0
-    I_pop(:,:) = 0.d0
-    I_imp(:,:) = 0.d0
+    ! SNP_imp(:) = 0.d0
+    ! SNP_pop(:) = 0.d0
+    ! I_pop(:,:) = 0.d0
+    ! I_imp(:,:) = 0.d0
     Cpop(:,:,:) = 0.d0
     Cimp(:,:,:) = 0.d0
-    NP_pop(:,:) = 0.d0
-    NP_imp(:,:) = 0.d0
+    CIQn(:,:) = 0.d0
+    CQmQn(:,:,:) = 0.d0
+    ! NP_pop(:,:) = 0.d0
+    ! NP_imp(:,:) = 0.d0
 
 
 end subroutine allocate_arrays
@@ -211,19 +215,21 @@ subroutine deallocate_arrays()
     deallocate( G0 )
 
     ! OBSERVABLE ARRAYS
-    deallocate( zeta )
+    ! deallocate( zeta )
     deallocate( Cpop )
     deallocate( Cimp )
     deallocate( pop_0 )
     deallocate( pop_t )
     deallocate( Qop_0 )
     deallocate( Qop_t )
-    deallocate( I_pop )
-    deallocate( I_imp )
-    deallocate( NP_pop )
-    deallocate( NP_imp )
-    deallocate( SNP_pop )
-    deallocate( SNP_imp )
+    deallocate( CIQn )
+    deallocate( CQmQn )
+    ! deallocate( I_pop )
+    ! deallocate( I_imp )
+    ! deallocate( NP_pop )
+    ! deallocate( NP_imp )
+    ! deallocate( SNP_pop )
+    ! deallocate( SNP_imp )
 
 end subroutine deallocate_arrays
 
@@ -246,11 +252,11 @@ subroutine system_bath_properties()
     do i = 1,F
         omega(i) = pi * sol * dble(2 * i - 1) / L
         c(i) = mu * omega(i) * 0.0103d0 * (-1)**(i+1)
-        do j = 1, cavitysteps+1
-            z = sqrt(omega(i)) * 0.0103d0 * &
-                sin( pi * dble(2 * i - 1) * (j-1) / cavitysteps )
-            zeta(j,i) = z * z
-        end do 
+        ! do j = 1, cavitysteps+1
+        !     z = sqrt(omega(i)) * 0.0103d0 * &
+        !         sin( pi * dble(2 * i - 1) * (j-1) / cavitysteps )
+        !     zeta(j,i) = z * z
+        ! end do 
         write(11, *) omega(i)
     end do
 
@@ -328,10 +334,10 @@ subroutine time_zero_ops()
         stop
     end if
 
-    I_0 = 0.d0
+    ! I_0 = 0.d0
     do i = 1,S
         pop_0(i) = 0.5d0 * ( XE(i)**2 + PE(i)**2 - zpe )
-        I_0 = I_0 + pop_0(i)
+        ! I_0 = I_0 + pop_0(i)
     end do
 
     ! IMPROVED POPULATION OPERATORS
@@ -409,69 +415,91 @@ subroutine accumulate_obs(ts)
         norm = 4.d0
     endif
 
-    Cpop(ts,1,1) = Cpop(ts,1,1) + norm * 1/sqrt(2.d0)*(pop_0(2) + pop_0(1)) * &
-                   1/sqrt(2.d0)*(pop_t(2) + pop_t(1))
-    Cpop(ts,1,2) = Cpop(ts,1,2) + norm * 1/sqrt(2.d0)*(pop_0(2) + pop_0(1)) * &
-                   1/sqrt(2.d0)*(pop_t(2) - pop_t(1))
+    ! POPULATION CF
+    do i = 1, S
+        do j = 1, S
+            Cpop(ts,i,j) = Cpop(ts,i,j) + norm * pop_0(i) * pop_t(j)
+        end do
+    end do
 
-    Cpop(ts,2,1) = Cpop(ts,2,1) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
-                   1/sqrt(2.d0)*(pop_t(2) + pop_t(1))
-    Cpop(ts,2,2) = Cpop(ts,2,2) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
-                   1/sqrt(2.d0)*(pop_t(2) - pop_t(1))
+    ! IMPROVED POPULATION CF
+    do i = 1, S
+        CIQn(ts,i) = CIQn(ts,i) + norm * Qop_t(i)
+        do j = 1, S
+            CQmQn(ts,i,j) = CQmQn(ts,i,j) + norm * Qop_0(i) * Qop_t(j)
+        end do
+    end do
+
+    do i = 1, S
+        do j = 1, S
+            Cimp(ts,i,j) = Cimp(ts,i,j) + ( S + norm * Qop_t(j) + &
+                           norm * Qop_0(i) * Qop_t(j) ) / dble(S*S)
+        end do
+    end do
+
+    ! Cpop(ts,1,1) = Cpop(ts,1,1) + norm * 1/sqrt(2.d0)*(pop_0(2) + pop_0(1)) * &
+    !                1/sqrt(2.d0)*(pop_t(2) + pop_t(1))
+    ! Cpop(ts,1,2) = Cpop(ts,1,2) + norm * 1/sqrt(2.d0)*(pop_0(2) + pop_0(1)) * &
+    !                1/sqrt(2.d0)*(pop_t(2) - pop_t(1))
+
+    ! Cpop(ts,2,1) = Cpop(ts,2,1) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
+    !                1/sqrt(2.d0)*(pop_t(2) + pop_t(1))
+    ! Cpop(ts,2,2) = Cpop(ts,2,2) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
+    !                1/sqrt(2.d0)*(pop_t(2) - pop_t(1))
 
     ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) TRADITIONAL OPERATORS
-    do i = 1,F
-        NP_pop(ts,i) = NP_pop(ts,i) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
-                       0.5d0 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
-    end do
+    ! do i = 1,F
+    !     NP_pop(ts,i) = NP_pop(ts,i) + norm * 1/sqrt(2.d0)*(pop_0(2) - pop_0(1)) * &
+    !                    0.5d0 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
+    ! end do
 
     ! CAVITY INTENSITY TRADITIONAL OPERATORS
-    if ( ts == 1 .or. ( mod(ts-1, 100) == 0 ) ) then
-        t = (ts-1)/100 + 1
-        do i = 1, cavitysteps+1
-            I_pop(t, i) = I_pop(t, i) + (norm * I_0 * &
-                          1/sqrt(2.d0) * (pop_0(2) - pop_0(1)) * &
-                          ( 2.d0 * sum( omega * zeta(i,:) * xn * xn) - sum(zeta(i,:) ) ))
-        end do
-    end if
+    ! if ( ts == 1 .or. ( mod(ts-1, 100) == 0 ) ) then
+    !     t = (ts-1)/100 + 1
+    !     do i = 1, cavitysteps+1
+    !         I_pop(t, i) = I_pop(t, i) + (norm * I_0 * &
+    !                       1/sqrt(2.d0) * (pop_0(2) - pop_0(1)) * &
+    !                       ( 2.d0 * sum( omega * zeta(i,:) * xn * xn) - sum(zeta(i,:) ) ))
+    !     end do
+    ! end if
 
     ! IMPROVED POPULATION OPERATORS
-    if ( electronic == "phi" ) then
-        norm = 4.d0
-    else if ( electronic == "phi2" ) then
-        norm = 16.d0
-    end if
+    ! if ( electronic == "phi" ) then
+    !     norm = 4.d0
+    ! else if ( electronic == "phi2" ) then
+    !     norm = 16.d0
+    ! end if
     
-    NQ1 = norm * Qop_t(1)
-    NQ2 = norm * Qop_t(2)
-    NQ1Q1 = norm * Qop_0(1)*Qop_t(1)
-    NQ1Q2 = norm * Qop_0(1)*Qop_t(2)
-    NQ2Q1 = norm * Qop_0(2)*Qop_t(1)
-    NQ2Q2 = norm * Qop_0(2)*Qop_t(2)
+    ! NQ1 = norm * Qop_t(1)
+    ! NQ2 = norm * Qop_t(2)
+    ! NQ1Q1 = norm * Qop_0(1)*Qop_t(1)
+    ! NQ1Q2 = norm * Qop_0(1)*Qop_t(2)
+    ! NQ2Q1 = norm * Qop_0(2)*Qop_t(1)
+    ! NQ2Q2 = norm * Qop_0(2)*Qop_t(2)
     
-    Cimp(ts,1,1) = Cimp(ts,1,1) + 1/sqrt(2.d0)/(S**2) * (&
-            ( S + NQ2 + NQ2Q2 ) + ( S + NQ1 + NQ2Q1 ) + &
-            ( S + NQ2 + NQ1Q2 ) + ( S + NQ1 + NQ1Q1 ) )
+    ! Cimp(ts,1,1) = Cimp(ts,1,1) + 1/sqrt(2.d0)/(S**2) * (&
+    !         ( S + NQ2 + NQ2Q2 ) + ( S + NQ1 + NQ2Q1 ) + &
+    !         ( S + NQ2 + NQ1Q2 ) + ( S + NQ1 + NQ1Q1 ) )
     
-    Cimp(ts,1,2) = Cimp(ts,1,2) + 1/sqrt(2.d0)/(S**2) * (&
-            ( S + NQ2 + NQ2Q2 ) - ( S + NQ1 + NQ2Q1 ) + &
-            ( S + NQ2 + NQ1Q2 ) - ( S + NQ1 + NQ1Q1 ) )
+    ! Cimp(ts,1,2) = Cimp(ts,1,2) + 1/sqrt(2.d0)/(S**2) * (&
+    !         ( S + NQ2 + NQ2Q2 ) - ( S + NQ1 + NQ2Q1 ) + &
+    !         ( S + NQ2 + NQ1Q2 ) - ( S + NQ1 + NQ1Q1 ) )
     
-    Cimp(ts,2,1) = Cimp(ts,2,1) + 1/sqrt(2.d0)/(S**2) * (&
-            ( S + NQ2 + NQ2Q2 ) + ( S + NQ1 + NQ2Q1 ) - &
-            ( S + NQ2 + NQ1Q2 ) - ( S + NQ1 + NQ1Q1 ) )
+    ! Cimp(ts,2,1) = Cimp(ts,2,1) + 1/sqrt(2.d0)/(S**2) * (&
+    !         ( S + NQ2 + NQ2Q2 ) + ( S + NQ1 + NQ2Q1 ) - &
+    !         ( S + NQ2 + NQ1Q2 ) - ( S + NQ1 + NQ1Q1 ) )
     
-    Cimp(ts,2,2) = Cimp(ts,2,2) + 1/sqrt(2.d0)/(S**2) * (&
-            ( S + NQ2 + NQ2Q2 ) - ( S + NQ1 + NQ2Q1 ) - &
-            ( S + NQ2 + NQ1Q2 ) + ( S + NQ1 + NQ1Q1 ) )
+    ! Cimp(ts,2,2) = Cimp(ts,2,2) + 1/sqrt(2.d0)/(S**2) * (&
+    !         ( S + NQ2 + NQ2Q2 ) - ( S + NQ1 + NQ2Q1 ) - &
+    !         ( S + NQ2 + NQ1Q2 ) + ( S + NQ1 + NQ1Q1 ) )
 
-    ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) IMPROVED OPERATORS
-    do i = 1,F
-        NP_imp(ts,i) = NP_imp(ts,i) + 1/sqrt(2.d0) * (&
-                       ( 1.d0 + norm * Qop_0(2) )/dble(S) - &
-                       ( 1.d0 + norm * Qop_0(1) )/dble(S) )* &
-                       0.5 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
-    end do
+    ! ! NUMBER OF PHOTONS (CHECK NORMALISATION!!) IMPROVED OPERATORS
+    ! do i = 1,F
+    !     NP_imp(ts,i) = NP_imp(ts,i) + 1/sqrt(2.d0) * (&
+    !                    ( 1.d0 + norm * Qop_0(2) )/dble(S) - &
+    !                    ( 1.d0 + norm * Qop_0(1) )/dble(S) )* &
+    !                    0.5 * ( pn(i)**2 / omega(i) + omega(i) * xn(i)**2 - 1.d0 )
+    ! end do
 
 end subroutine accumulate_obs
 
@@ -482,54 +510,74 @@ subroutine average_obs()
     use variables
     implicit none
     integer :: i,j,k
+    character(len=120) :: fmt
 
-    write(6,"(//'AVERAGING OBSERVABLES:')")
+    write(6,'(//"AVERAGING OBSERVABLES")')
 
-    ! TRADITIONAL POPULATION OPERATORS
-    open(11, file="Cpop.out", action="write", status="unknown")
-    do i = 1,tsteps+1
-        Cpop(i,:,:) = Cpop(i,:,:) / dble(ntraj)
-        write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        dble(i-1)*dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,2,1), Cpop(i,2,2)
+    open(11, file="Cpop.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    Cpop(:,:,:) = Cpop(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, Cpop(i,1,1), Cpop(i,1,2), &
+                                  Cpop(i,2,1), Cpop(i,2,2)
     end do
+    write(6,*) "- Wrote population autocorrelation functions to Cpop.out"
     close(11)
-    write(6,"('- Saved population autocorrelation functions to Cpop.out')")
 
-    ! IMPROVED POPULATION OPERATORS
-    open(11, file="Cimp.out", action="write", status="unknown")
-    do i = 1,tsteps+1
-        Cimp(i,:,:) = Cimp(i,:,:) / dble(ntraj)
-        write(11,'(F10.4,2x,4(ES13.6,2x))') &
-        dble(i-1)*dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,2,1), Cimp(i,2,2)
+    open(11, file="Cimp.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    Cimp(:,:,:) = Cimp(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, Cimp(i,1,1), Cimp(i,1,2), &
+                                  Cimp(i,2,1), Cimp(i,2,2)
     end do
+    write(6,*) "- Wrote improved population operator ACFs to Cimp.out"
     close(11)
-    write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
+
+    open(11, file="CIQn.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,2(2x,ES13.5))"
+    CIQn(:,:) = CIQn(:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, CIQn(i,1), CIQn(i,2)
+    end do
+    write(6,*) "- Wrote improved population operator CIQn to CIQn.out"
+    close(11)
+
+    open(11, file="CQmQn.out", status="unknown", action="write")
+    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    CQmQn(:,:,:) = CQmQn(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, CQmQn(i,1,1), CQmQn(i,1,2), &
+                                  CQmQn(i,2,1), CQmQn(i,2,2)
+    end do
+    write(6,*) "- Wrote improved population operator CQmQn to CQmQn.out"
+    close(11)
 
     ! NUMBER OF PHOTONS
-    SNP_pop(:) = sum(NP_pop, 2)
-    open(11, file="Nph_pop.out", action="write", status="unknown")
-    do i = 1,tsteps+1
-        write(11, '(F10.4,2x,201(ES13.5,2x))') dble(i-1) * dt, &
-        SNP_pop(i)/dble(ntraj), (NP_pop(i,j)/dble(ntraj),j=1,F)
-    end do
-    close(11)
-    SNP_imp(:) = sum(NP_imp, 2)
-    open(11, file="Nph_imp.out", action="write", status="unknown")
-    do i = 1,tsteps+1
-        write(11, '(F10.4,2x,201(ES13.5,2x))') dble(i-1) * dt, &
-        SNP_imp(i)/dble(ntraj), (NP_imp(i,j)/dble(ntraj),j=1,F)
-    end do
-    close(11)
-    write(6,"('- Saved number of photons to Nph_pop.out and Nph_imp.out')")
+    ! SNP_pop(:) = sum(NP_pop, 2)
+    ! open(11, file="Nph_pop.out", action="write", status="unknown")
+    ! do i = 1,tsteps+1
+    !     write(11, '(F10.4,2x,201(ES13.5,2x))') dble(i-1) * dt, &
+    !     SNP_pop(i)/dble(ntraj), (NP_pop(i,j)/dble(ntraj),j=1,F)
+    ! end do
+    ! close(11)
+    ! SNP_imp(:) = sum(NP_imp, 2)
+    ! open(11, file="Nph_imp.out", action="write", status="unknown")
+    ! do i = 1,tsteps+1
+    !     write(11, '(F10.4,2x,201(ES13.5,2x))') dble(i-1) * dt, &
+    !     SNP_imp(i)/dble(ntraj), (NP_imp(i,j)/dble(ntraj),j=1,F)
+    ! end do
+    ! close(11)
+    ! write(6,"('- Saved number of photons to Nph_pop.out and Nph_imp.out')")
 
-    ! CAVITY INTENSITY
-    open(11, file="I_pop.out", action="write", status="unknown")
-    do i = 1,tsteps/100 + 1
-        write(11, '(F10.4,2x,1001(ES13.5,2x))') dble(i-1) * dt, &
-        (I_pop(i,j)/dble(ntraj),j=1,cavitysteps+1)
-    end do
-    close(11)
-    write(6,"('- Saved cavity intensity to I_pop.out')")
+    ! ! CAVITY INTENSITY
+    ! open(11, file="I_pop.out", action="write", status="unknown")
+    ! do i = 1,tsteps/100 + 1
+    !     write(11, '(F10.4,2x,1001(ES13.5,2x))') dble(i-1) * dt, &
+    !     (I_pop(i,j)/dble(ntraj),j=1,cavitysteps+1)
+    ! end do
+    ! close(11)
+    ! write(6,"('- Saved cavity intensity to I_pop.out')")
 
 
 end subroutine average_obs
