@@ -6,6 +6,7 @@ module variables
     double complex, parameter :: eye = dcmplx(0.d0, 1.d0)
     double precision, parameter :: pi = 3.14159265359d0
     double precision, parameter :: sol = 137.03599908381668d0
+    double precision, parameter :: eps0 = 0.079577471546d0
 
     ! PARALLEL PARAMETERS
     integer :: threads                          ! Number of max OMP threads
@@ -43,7 +44,6 @@ module variables
     double precision, allocatable :: c(:)       ! Electron-phonon couplings
 
     ! POPULATION OBSERVABLES
-    ! double precision :: I_0                     ! Time-zero identity
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
     double precision, allocatable :: pop_t(:)   ! Time-t populations
     double precision, allocatable :: Qop_0(:)   ! Time-zero improved operator
@@ -54,13 +54,8 @@ module variables
     double precision, allocatable :: CQmQn(:,:,:)! Improved population CF
 
     ! BATH OBSERVABLES
-    ! double precision, allocatable :: zeta(:,:)  ! Utility array for intensity
-    ! double precision, allocatable :: I_pop(:,:) ! Cavity intensity traditional
-    ! double precision, allocatable :: I_imp(:,:) ! Cavity intensity improved
-    ! double precision, allocatable :: NP_pop(:,:)! Number of photons per mode trad.
-    ! double precision, allocatable :: NP_imp(:,:)! Number of photons per mode impr.
-    ! double precision, allocatable :: SNP_pop(:) ! Total number of photons trad.
-    ! double precision, allocatable :: SNP_imp(:) ! Total number of photons impr.
+    double precision, allocatable :: Npop(:,:,:)! Photon number
+    double precision, allocatable :: Nimp(:,:,:)! Photon number
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
