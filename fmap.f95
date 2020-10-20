@@ -428,7 +428,7 @@ subroutine accumulate_obs(ts)
         np = 0.5d0 * (pn(i)**2/omega(i) + xn(i)**2 * omega(i) - 1)
         do j = 1, S
             Npop(ts,j,i) = Npop(ts,j,i) + norm*pop_0(j)*(pop_t(1)+pop_t(2))*np
-            Nimp(ts,j,i) = Nimp(ts,j,i) + (1.d0 + norm*Qop_0(j)/dble(S))*np
+            Nimp(ts,j,i) = Nimp(ts,j,i) + norm*(1.d0 + Qop_0(j))/dble(S)*np
         end do
     end do
 
