@@ -36,12 +36,13 @@ module variables
 
     ! SYSTEM PROPERTIES
     double precision :: L                        ! Length of cavity
-    double precision :: mu                       ! Dipole operator
+    double precision :: mu12, mu23               ! Dipole operator
     double precision, allocatable :: eps(:)      ! State energies
 
     ! BATH VARIABLES
     double precision, allocatable :: omega(:)   ! Bath frequencies
-    double precision, allocatable :: c(:)       ! Electron-phonon couplings
+    double precision, allocatable :: c12(:)     ! Electron-phonon couplings
+    double precision, allocatable :: c23(:)     ! Electron-phonon couplings
 
     ! POPULATION OBSERVABLES
     double precision, allocatable :: pop_0(:)   ! Time-zero populations

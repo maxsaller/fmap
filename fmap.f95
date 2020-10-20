@@ -149,7 +149,8 @@ subroutine allocate_arrays()
     allocate( eps(S) )
 
     ! BATH ARRAYS
-    allocate( c(F) )
+    allocate( c12(F) )
+    allocate( c23(F) )
     allocate( omega(F) )
 
     ! POTENTIAL AND FORCE MATRICES
@@ -165,8 +166,8 @@ subroutine allocate_arrays()
     allocate( Nimp(tsteps+1,S,F) )
     allocate( Cpop(tsteps+1,S,S) )
     allocate( Cimp(tsteps+1,S,S) )
-    allocate( CIQn(tsteps+1, S) )
-    allocate( CQmQn(tsteps+1, S, S) )
+    allocate( CIQn(tsteps+1,S) )
+    allocate( CQmQn(tsteps+1,S,S) )
 
     Npop(:,:,:) = 0.d0
     Nimp(:,:,:) = 0.d0
@@ -198,7 +199,8 @@ subroutine deallocate_arrays()
     deallocate( eps )
 
     ! BATH ARRAYS
-    deallocate( c )
+    deallocate( c12 )
+    deallocate( c23 )
     deallocate( omega )
 
     ! POTENTIAL AND FORCE MATRICES
@@ -229,9 +231,11 @@ subroutine system_bath_properties()
     double precision :: d
 
     ! System parameters
-    mu     = 1.034d0
+    mu12   = 1.034d0
+    mu23   = -2.536d0
     eps(1) = -0.6738d0
     eps(2) = -0.2798d0 
+    eps(3) = -0.1547d0
     L      = 236215.76557822127d0
 
     ! Set position of two-level system in the cavity
@@ -241,12 +245,14 @@ subroutine system_bath_properties()
     do i = 1,F
         if ( d == L/2.d0 ) then ! If TLS @ center of cavity, use cancellation
             omega(i) = pi * sol * dble(2 * i - 1) / L 
-            c(i) = mu * omega(i) * dsqrt(2.d0/eps0/L) * (-1.d0)**(i+1)
+            c12(i) = mu12 * omega(i) * dsqrt(2.d0/eps0/L) * (-1.d0)**(i+1)
+            c23(i) = mu23 * omega(i) * dsqrt(2.d0/eps0/L) * (-1.d0)**(i+1)
         else
             omega(i) = pi * sol * dble(i) / L
-            c(i) = mu * omega(i) * dsqrt(2.d0/eps0/L) * sin(omega(i)/sol * d)
+            c12(i) = mu12 * omega(i) * dsqrt(2.d0/eps0/L) * sin(omega(i)/sol*d)
+            c23(i) = mu23 * omega(i) * dsqrt(2.d0/eps0/L) * sin(omega(i)/sol*d)
         end if
-        write(11, *) omega(i), c(i)
+        write(11, *) omega(i), c12(i), c23(i)
     end do
     close(11)
 
@@ -427,8 +433,9 @@ subroutine accumulate_obs(ts)
     do i = 1, F
         np = 0.5d0 * (pn(i)**2/omega(i) + xn(i)**2 * omega(i) - 1)
         do j = 1, S
-            Npop(ts,j,i) = Npop(ts,j,i) + norm*pop_0(j)*(pop_t(1)+pop_t(2))*np
-            Nimp(ts,j,i) = Nimp(ts,j,i) + (1.d0 + norm*Qop_0(j)/dble(S))*np
+            Npop(ts,j,i) = Npop(ts,j,i) + norm * pop_0(j) * &
+                                          (pop_t(1)+pop_t(2)+pop_t(3)) * np
+            Nimp(ts,j,i) = Nimp(ts,j,i) + (1.d0 + norm*Qop_0(j))/dble(S)*np
         end do
     end do
 
@@ -446,40 +453,43 @@ subroutine average_obs()
     write(6,'(//"AVERAGING OBSERVABLES")')
 
     open(11, file="Cpop.out", status="unknown", action="write")
-    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    write(fmt,*) "(f10.4,9(2x,ES13.5))"
     Cpop(:,:,:) = Cpop(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, Cpop(i,1,1), Cpop(i,1,2), &
-                                  Cpop(i,2,1), Cpop(i,2,2)
+        write(11,fmt) (i-1) * dt, Cpop(i,1,1), Cpop(i,1,2), Cpop(i,1,3), &
+                                  Cpop(i,2,1), Cpop(i,2,2), Cpop(i,2,3), &
+                                  Cpop(i,3,1), Cpop(i,3,2), Cpop(i,3,3)
     end do
     write(6,*) "- Wrote population autocorrelation functions to Cpop.out"
     close(11)
 
     open(11, file="Cimp.out", status="unknown", action="write")
-    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    write(fmt,*) "(f10.4,9(2x,ES13.5))"
     Cimp(:,:,:) = Cimp(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, Cimp(i,1,1), Cimp(i,1,2), &
-                                  Cimp(i,2,1), Cimp(i,2,2)
+        write(11,fmt) (i-1) * dt, Cimp(i,1,1), Cimp(i,1,2), Cimp(i,1,3), &
+                                  Cimp(i,2,1), Cimp(i,2,2), Cimp(i,2,3), &
+                                  Cimp(i,3,1), Cimp(i,3,2), Cimp(i,3,3)
     end do
     write(6,*) "- Wrote improved population operator ACFs to Cimp.out"
     close(11)
 
     open(11, file="CIQn.out", status="unknown", action="write")
-    write(fmt,*) "(f10.4,2(2x,ES13.5))"
+    write(fmt,*) "(f10.4,3(2x,ES13.5))"
     CIQn(:,:) = CIQn(:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, CIQn(i,1), CIQn(i,2)
+        write(11,fmt) (i-1) * dt, CIQn(i,1), CIQn(i,2), CIQn(i,3)
     end do
     write(6,*) "- Wrote improved population operator CIQn to CIQn.out"
     close(11)
 
     open(11, file="CQmQn.out", status="unknown", action="write")
-    write(fmt,*) "(f10.4,4(2x,ES13.5))"
+    write(fmt,*) "(f10.4,9(2x,ES13.5))"
     CQmQn(:,:,:) = CQmQn(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, CQmQn(i,1,1), CQmQn(i,1,2), &
-                                  CQmQn(i,2,1), CQmQn(i,2,2)
+        write(11,fmt) (i-1) * dt, CQmQn(i,1,1), CQmQn(i,1,2), CQmQn(i,1,3), &
+                                  CQmQn(i,2,1), CQmQn(i,2,2), CQmQn(i,2,3), &
+                                  CQmQn(i,3,1), CQmQn(i,3,2), CQmQn(i,3,3)
     end do
     write(6,*) "- Wrote improved population operator CQmQn to CQmQn.out"
     close(11)
@@ -488,8 +498,9 @@ subroutine average_obs()
     write(fmt,'(a7,i3,a12)') "(f10.4,",S*(F+1),"(2x,ES13.5))"
     Npop(:,:,:) = Npop(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, sum(Npop(i,1,:)), sum(Npop(i,2,:)), &
-        (Npop(i,1,j),j=1,F), (Npop(i,2,j),j=1,F)
+        write(11,fmt) (i-1) * dt, &
+        sum(Npop(i,1,:)), sum(Npop(i,2,:)), sum(Npop(i,3,:)), &
+        (Npop(i,1,j),j=1,F), (Npop(i,2,j),j=1,F), (Npop(i,3,j),j=1,F)
     end do
     write(6,*) "- Wrote per DoF photon numbers to Npop.out"
     close(11)
@@ -498,8 +509,9 @@ subroutine average_obs()
     write(fmt,'(a7,i3,a12)') "(f10.4,",S*(F+1),"(2x,ES13.5))"
     Nimp(:,:,:) = Nimp(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, sum(Nimp(i,1,:)), sum(Nimp(i,2,:)), &
-        (Nimp(i,1,j),j=1,F), (Nimp(i,2,j),j=1,F)
+        write(11,fmt) (i-1) * dt, &
+        sum(Nimp(i,1,:)), sum(Nimp(i,2,:)), sum(Nimp(i,3,:)), &
+        (Nimp(i,1,j),j=1,F), (Nimp(i,2,j),j=1,F), (Nimp(i,3,j),j=1,F)
     end do
     write(6,*) "- Wrote per DoF photon numbers to Nimp.out"
     close(11)
@@ -523,7 +535,8 @@ subroutine step_vverlet()
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
+                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
     ! HALF STEP IN MAPPING MOMENTA
@@ -545,7 +558,8 @@ subroutine step_vverlet()
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
+                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
 end subroutine step_vverlet
@@ -577,7 +591,8 @@ subroutine step_diag
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
+                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
     ! FULL STEP IN NUCLEAR POSITIONS
@@ -591,7 +606,8 @@ subroutine step_diag
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c(i)*(XE(1)*XE(2) + PE(1)*PE(2)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
+                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
     ! HALF STEP IN MAPPING VARIABLES
@@ -625,9 +641,12 @@ subroutine potential_force()
     V(:,:) = 0.d0
     V(1,1) = eps(1)
     V(2,2) = eps(2)
+    V(3,3) = eps(3)
     do i = 1,F
-        V(1,2) = V(1,2) + c(i) * xn(i)
-        V(2,1) = V(2,1) + c(i) * xn(i)
+        V(1,2) = V(1,2) + c12(i) * xn(i)
+        V(2,1) = V(2,1) + c12(i) * xn(i)
+        V(2,3) = V(2,3) + c23(i) * xn(i)
+        V(3,2) = V(3,2) + c23(i) * xn(i)
     end do
 
     ! SHIFT TRACE OF V. NOTE THAT G IS ALREADY TRACELESS
