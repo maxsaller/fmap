@@ -64,8 +64,12 @@ program fmap
             call time_t_ops()
             call accumulate_obs(ts+1)
 
-        end do
+            if ( t == 1 ) then
+                write(13,'(401f10.4)') ts*dble(dt), (xn(i), i=1,F), (pn(i), i=1,F)
+            end if
 
+        end do
+        write(*,*) t
     end do
 
     ! AVERAGE AND OUTPUT OBSERVABLES
@@ -435,7 +439,7 @@ subroutine accumulate_obs(ts)
         do j = 1, S
             Npop(ts,j,i) = Npop(ts,j,i) + norm * pop_0(j) * &
                                           (pop_t(1)+pop_t(2)+pop_t(3)) * np
-            Nimp(ts,j,i) = Nimp(ts,j,i) + (1.d0 + norm*Qop_0(j))/dble(S)*np
+            Nimp(ts,j,i) = Nimp(ts,j,i) + norm*(1.d0 + Qop_0(j))/dble(S) * np
         end do
     end do
 
@@ -535,8 +539,8 @@ subroutine step_vverlet()
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
-                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) - &
+                        hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
     ! HALF STEP IN MAPPING MOMENTA
@@ -558,8 +562,8 @@ subroutine step_vverlet()
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
-                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) - &
+                        hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
 end subroutine step_vverlet
@@ -591,8 +595,8 @@ subroutine step_diag
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
-                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) - &
+                        hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
     ! FULL STEP IN NUCLEAR POSITIONS
@@ -606,8 +610,8 @@ subroutine step_diag
     ! HALF STEP IN NUCLEAR MOMENTA
     do i = 1,F
         pn(i) = pn(i) - hdt * G0(i)
-        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) &
-                      - hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
+        pn(i) = pn(i) - hdt * (c12(i)*(XE(1)*XE(2) + PE(1)*PE(2))) - &
+                        hdt * (c23(i)*(XE(2)*XE(3) + PE(2)*PE(3)))
     end do
 
     ! HALF STEP IN MAPPING VARIABLES
