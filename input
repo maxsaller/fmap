@@ -8,6 +8,7 @@ num_of_trajectories     1000
 num_of_time-steps       21000
 time-step_duration      0.1
 cavity_steps            1000
+time_interval           1000
 integrator_type         diag
 ==============================
 

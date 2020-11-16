@@ -69,7 +69,6 @@ program fmap
             end if
 
         end do
-        write(*,*) t
     end do
 
     ! AVERAGE AND OUTPUT OBSERVABLES
@@ -104,7 +103,8 @@ subroutine read_input()
     read(11, *) dum, ntraj
     read(11, *) dum, tsteps
     read(11, *) dum, dt
-    read(11, *) dum, cavitysteps
+    read(11, *) dum, cav_steps
+    read(11, *) dum, tslice
     read(11, *) dum, intgt
     read(11, '(A)') dum
     read(11, *)
@@ -156,6 +156,7 @@ subroutine allocate_arrays()
     allocate( c12(F) )
     allocate( c23(F) )
     allocate( omega(F) )
+    allocate( zeta(F,cav_steps) )
 
     ! POTENTIAL AND FORCE MATRICES
     allocate( G0(F) )
@@ -172,9 +173,13 @@ subroutine allocate_arrays()
     allocate( Cimp(tsteps+1,S,S) )
     allocate( CIQn(tsteps+1,S) )
     allocate( CQmQn(tsteps+1,S,S) )
+    allocate( Ipop(tsteps/tslice + 1, S, cav_steps) )
+    allocate( Iimp(tsteps/tslice + 1, S, cav_steps) )
 
     Npop(:,:,:) = 0.d0
     Nimp(:,:,:) = 0.d0
+    Ipop(:,:,:) = 0.d0
+    Iimp(:,:,:) = 0.d0
     Cpop(:,:,:) = 0.d0
     Cimp(:,:,:) = 0.d0
     CIQn(:,:) = 0.d0
@@ -205,6 +210,7 @@ subroutine deallocate_arrays()
     ! BATH ARRAYS
     deallocate( c12 )
     deallocate( c23 )
+    deallocate( zeta )
     deallocate( omega )
 
     ! POTENTIAL AND FORCE MATRICES
@@ -214,6 +220,8 @@ subroutine deallocate_arrays()
     ! OBSERVABLE ARRAYS
     deallocate( Nimp )
     deallocate( Npop )
+    deallocate( Iimp )
+    deallocate( Ipop )
     deallocate( Cpop )
     deallocate( Cimp )
     deallocate( pop_0 )
@@ -232,7 +240,7 @@ subroutine system_bath_properties()
     use variables
     implicit none
     integer :: i,j
-    double precision :: d
+    double precision :: d,r
 
     ! System parameters
     mu12   = 1.034d0
@@ -257,6 +265,10 @@ subroutine system_bath_properties()
             c23(i) = mu23 * omega(i) * dsqrt(2.d0/eps0/L) * sin(omega(i)/sol*d)
         end if
         write(11, *) omega(i), c12(i), c23(i)
+        do j = 1, cav_steps
+            r = (j-1) * L/(cav_steps-1)
+            zeta(i,j) = dsqrt(omega(i)/eps0/L) * sin(omega(i)/sol * r)
+        end do
     end do
     close(11)
 
@@ -391,7 +403,7 @@ subroutine accumulate_obs(ts)
     implicit none
     integer :: i,j,t
     integer, intent(in) :: ts
-    double precision :: norm, np
+    double precision :: norm, np, fisum, nosum
 
     ! TIME ZERO OBSERVABLES
     if ( ts == 1 ) then
@@ -439,9 +451,25 @@ subroutine accumulate_obs(ts)
         do j = 1, S
             Npop(ts,j,i) = Npop(ts,j,i) + norm * pop_0(j) * &
                                           (pop_t(1)+pop_t(2)+pop_t(3)) * np
-            Nimp(ts,j,i) = Nimp(ts,j,i) + norm*(1.d0 + Qop_0(j))/dble(S) * np
+            Nimp(ts,j,i) = Nimp(ts,j,i) + (1.d0 + norm*Qop_0(j))/dble(S) * np
         end do
     end do
+
+    ! CAVITY FUNCTION
+    if ( mod((ts-1),tslice) == 0 ) then
+        do i = 1, cav_steps
+            fisum = sum(dsqrt(2*omega(:))*zeta(:,i)*xn(:))
+            nosum = sum(zeta(:,i)**2)
+            do j = 1, S
+                Ipop((ts-1)/tslice + 1,j,i) = Ipop((ts-1)/tslice + 1,j,i) + &
+                                              norm * pop_0(j) * sum(pop_t) * &
+                                              (fisum*fisum - nosum)
+                Iimp((ts-1)/tslice + 1,j,i) = Iimp((ts-1)/tslice + 1,j,i) + &
+                                              (1.d0 + norm*Qop_0(j))/dble(S) * &
+                                              (fisum*fisum - nosum)
+            end do
+        end do
+    end if
 
 end subroutine accumulate_obs
 
@@ -518,6 +546,34 @@ subroutine average_obs()
         (Nimp(i,1,j),j=1,F), (Nimp(i,2,j),j=1,F), (Nimp(i,3,j),j=1,F)
     end do
     write(6,*) "- Wrote per DoF photon numbers to Nimp.out"
+    close(11)
+
+    open(11, file="Ipop.out", status="unknown", action="write")
+    write(fmt,'(a7,i4,a12)') "(f10.4,",cav_steps*S,"(2x,ES13.5))"
+    Ipop(:,:,:) = Ipop(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        if ( mod((i-1),tslice) == 0 ) then
+            write(11,fmt) (i-1) * dt, &
+                          (Ipop((i-1)/tslice + 1,1,j),j=1,cav_steps), &
+                          (Ipop((i-1)/tslice + 1,2,j),j=1,cav_steps), &
+                          (Ipop((i-1)/tslice + 1,3,j),j=1,cav_steps)
+        end if
+    end do
+    write(6,*) "- Wrote per cavity intensity to Ipop.out"
+    close(11)
+
+    open(11, file="Iimp.out", status="unknown", action="write")
+    write(fmt,'(a7,i4,a12)') "(f10.4,",cav_steps*S,"(2x,ES13.5))"
+    Iimp(:,:,:) = Iimp(:,:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        if ( mod((i-1),tslice) == 0 ) then
+            write(11,fmt) (i-1) * dt, &
+                          (Iimp((i-1)/tslice + 1,1,j),j=1,cav_steps), &
+                          (Iimp((i-1)/tslice + 1,2,j),j=1,cav_steps), &
+                          (Iimp((i-1)/tslice + 1,3,j),j=1,cav_steps)
+        end if
+    end do
+    write(6,*) "- Wrote per cavity intensity to Ipop.out"
     close(11)
 
 end subroutine average_obs

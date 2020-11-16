@@ -16,7 +16,8 @@ module variables
     integer :: S                                ! Electronic states
     integer :: ntraj                            ! Number of trajectories
     integer :: tsteps                           ! Number of time-steps
-    integer :: cavitysteps                      ! Number of cavity spatial steps
+    integer :: cav_steps                        ! Number of cavity spatial steps
+    integer :: tslice                           ! Cavity intensity time interval
     double precision :: dt                      ! Time-step duration
     character(len=6) :: Aop                     ! Electronic sampling type
     character(len=6) :: Bop                     ! Electronic sampling type
@@ -43,6 +44,8 @@ module variables
     double precision, allocatable :: omega(:)   ! Bath frequencies
     double precision, allocatable :: c12(:)     ! Electron-phonon couplings
     double precision, allocatable :: c23(:)     ! Electron-phonon couplings
+    double precision, allocatable :: zeta(:,:)  ! Cavity funtion
+
 
     ! POPULATION OBSERVABLES
     double precision, allocatable :: pop_0(:)   ! Time-zero populations
@@ -57,6 +60,8 @@ module variables
     ! BATH OBSERVABLES
     double precision, allocatable :: Npop(:,:,:)! Photon number
     double precision, allocatable :: Nimp(:,:,:)! Photon number
+    double precision, allocatable :: Ipop(:,:,:)! Cavity intensity function
+    double precision, allocatable :: Iimp(:,:,:)! Cavity intensity function
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
