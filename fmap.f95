@@ -392,9 +392,9 @@ subroutine accumulate_obs(ts)
 
     use variables
     implicit none
-    integer :: i,j,t
+    integer :: i,j,k,m,t
     integer, intent(in) :: ts
-    double precision :: norm, np, fisum, nosum
+    double precision :: norm, np, fisum, nosum, temp
 
     ! TIME ZERO OBSERVABLES
     if ( ts == 1 ) then
@@ -440,9 +440,26 @@ subroutine accumulate_obs(ts)
     do i = 1, F
         np = 0.5d0 * (pn(i)**2/omega(i) + xn(i)**2 * omega(i) - 1)
         do j = 1, S
-            Npop(ts,j,i) = Npop(ts,j,i) + norm*pop_0(j)*sum(pop_t)*np
+            Npop(ts,j,i) = Npop(ts,j,i) + norm*pop_0(j)*sum(populationp_t)*np
+            
+            ! Unity mapping
             Nimp(ts,j,i) = Nimp(ts,j,i) + norm*(1.d0 + Qop_0(j))/dble(S)*np
         end do
+            ! Expand-Improve-Expand(1)-LSC
+            ! temp = 0.d0
+            ! do k = 1,S
+            !     do m = 1,S
+            !         ! Tr[rho phi e^iHt |m><m| N e^-iHt]
+            !         temp = temp + norm * pop_t(m) * np 
+            !     end do
+            !     ! Tr[rho 1 e^iHt Q_k N e^-iHt]
+            !     temp = temp + norm * Qop_t(k) * np
+            !     ! Tr[rho Q_j e^iHt 1 N e^-iHt]
+            !     temp = temp + norm * Qop_0(j) * np
+            !     ! Tr[rho Q_j e^iHt Q_k N e^-iHt]
+            !     temp = temp + norm * Qop_0(j) * Qop_t(k) * np
+            ! end do
+            ! Nimp(ts,j,i) = Nimp(ts,j,i) + temp/dble(S*S)
     end do
 
     ! CAVITY INTENSITY
