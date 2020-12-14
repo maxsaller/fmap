@@ -440,7 +440,7 @@ subroutine accumulate_obs(ts)
     do i = 1, F
         np = 0.5d0 * (pn(i)**2/omega(i) + xn(i)**2 * omega(i) - 1)
         do j = 1, S
-            Npop(ts,j,i) = Npop(ts,j,i) + norm*pop_0(j)*sum(populationp_t)*np
+            Npop(ts,j,i) = Npop(ts,j,i) + norm*pop_0(j)*sum(pop_t)*np
             
             ! Unity mapping
             Nimp(ts,j,i) = Nimp(ts,j,i) + norm*(1.d0 + Qop_0(j))/dble(S)*np
