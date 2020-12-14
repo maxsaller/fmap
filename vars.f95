@@ -75,4 +75,8 @@ module variables
     double precision :: G1_t                    ! T.-dep. bath input fns. t=t
     double precision :: G2_0                    ! T.-indep. bath input fns.
 
+    ! Photon nunber
+    double precision, allocatable :: Epop(:,:)
+    double precision, allocatable :: Eimp(:,:)
+
 end module variables

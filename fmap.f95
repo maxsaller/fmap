@@ -51,7 +51,7 @@ program fmap
         call cpu_time( start1 )
         call time_zero_ops()
         call accumulate_obs(1)
-        call proj_free_inputs(1)
+        !call proj_free_inputs(1)
         call cpu_time( end1 )
         t_ops = t_ops + end1 - start1
 
@@ -76,7 +76,7 @@ program fmap
             call cpu_time( start1 )
             call time_t_ops()
             call accumulate_obs(ts+1)
-            call proj_free_inputs(ts+1)
+            !call proj_free_inputs(ts+1)
             call cpu_time( end1 )
             t_ops = t_ops + end1 - start1
 
@@ -167,10 +167,11 @@ subroutine allocate_arrays()
 
     use variables
     implicit none
+    double precision :: zero(1) = 0.d0
 
     ! LAPACK WORK ARRAY
     allocate( work(1) )
-    call dsyev("V", "U", S, 0.d0, S, 0.d0, work, -1, info)
+    call dsyev("V", "U", S, zero, S, zero, work, -1, info)
     lenwork = int(work(1))
     deallocate(work)
     allocate( work(lenwork) )
@@ -200,22 +201,27 @@ subroutine allocate_arrays()
     Cpop(:,:,:) = 0.d0
     Cimp(:,:,:) = 0.d0
 
+    allocate( Epop(tsteps+1,S) )
+    allocate( Eimp(tsteps+1,S) )
+    Epop(:,:) = 0.d0
+    Eimp(:,:) = 0.d0
+
     ! PROJECTION FREE INPUT ARRAYS
-    allocate( F1(tsteps+1,S,S,S,S) )
-    allocate( F2(tsteps+1,S,S,S,S) )
-    allocate( K1(tsteps+1,S,S,S,S) )
-    allocate( K3(tsteps+1,S,S,S,S) )
-    allocate( coh_0(S) )
-    allocate( coh_t(S) )
-    F1(:,:,:,:,:) = 0.d0
-    F2(:,:,:,:,:) = 0.d0
-    K1(:,:,:,:,:) = 0.d0
-    K3(:,:,:,:,:) = 0.d0
-    coh_0(:) = 0.d0
-    coh_t(:) = 0.d0
-    G1_0 = 0.d0
-    G1_t = 0.d0
-    G2_0 = 0.d0
+    ! allocate( F1(tsteps+1,S,S,S,S) )
+    ! allocate( F2(tsteps+1,S,S,S,S) )
+    ! allocate( K1(tsteps+1,S,S,S,S) )
+    ! allocate( K3(tsteps+1,S,S,S,S) )
+    ! allocate( coh_0(S) )
+    ! allocate( coh_t(S) )
+    ! F1(:,:,:,:,:) = 0.d0
+    ! F2(:,:,:,:,:) = 0.d0
+    ! K1(:,:,:,:,:) = 0.d0
+    ! K3(:,:,:,:,:) = 0.d0
+    ! coh_0(:) = 0.d0
+    ! coh_t(:) = 0.d0
+    ! G1_0 = 0.d0
+    ! G1_t = 0.d0
+    ! G2_0 = 0.d0
 
 end subroutine allocate_arrays
 
@@ -252,13 +258,16 @@ subroutine deallocate_arrays()
     deallocate( Qop_0 )
     deallocate( Qop_t )
 
+    deallocate( Epop )
+    deallocate( Eimp )
+
     ! PROJECTION FREE INPUT ARRAYS
-    deallocate( coh_0 )
-    deallocate( coh_t )
-    deallocate( F1 )
-    deallocate( F2 )
-    deallocate( K1 )
-    deallocate( K3 )
+    ! deallocate( coh_0 )
+    ! deallocate( coh_t )
+    ! deallocate( F1 )
+    ! deallocate( F2 )
+    ! deallocate( K1 )
+    ! deallocate( K3 )
 
 end subroutine deallocate_arrays
 
@@ -378,33 +387,33 @@ subroutine time_zero_ops()
     end do
 
     ! PFI BATH FUNCTIONS
-    do i = 1,F
-        G1_0 = G1_0 - coeff(i) * xn(i)
-        G2_0 = G2_0 + eye * coeff(i) * pn(i) * &
-               tanh(beta * omega(i)/2.d0) / omega(i)
-    end do
+    ! do i = 1,F
+    !     G1_0 = G1_0 - coeff(i) * xn(i)
+    !     G2_0 = G2_0 + eye * coeff(i) * pn(i) * &
+    !            tanh(beta * omega(i)/2.d0) / omega(i)
+    ! end do
 
     ! COHERENCES
-    coh_0(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
-    coh_0(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
+    ! coh_0(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
+    ! coh_0(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
 
     ! CALCULATE NORMS
-    if ( Aop == "seo" .and. Bop == "seo" ) then
-        pop_norm = 16.d0
-    else if ( Aop == "wigner" .and. Bop == "wigner" ) then
-        write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
-                   "'wigner' does not make sense! At least one operator ",&
-                   "must be projected onto onto the SEO subspace!"
-        stop
-    else
-        pop_norm = 4.d0
-    endif
+    ! if ( Aop == "seo" .and. Bop == "seo" ) then
+    !     pop_norm = 16.d0
+    ! else if ( Aop == "wigner" .and. Bop == "wigner" ) then
+    !     write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
+    !                "'wigner' does not make sense! At least one operator ",&
+    !                "must be projected onto onto the SEO subspace!"
+    !     stop
+    ! else
+    !     pop_norm = 4.d0
+    ! endif
 
-    if ( electronic == "phi" ) then
-        imp_norm = 4.d0
-    else if ( electronic == "phi2" ) then
-        imp_norm = 16.d0
-    end if
+    ! if ( electronic == "phi" ) then
+    !     imp_norm = 4.d0
+    ! else if ( electronic == "phi2" ) then
+    !     imp_norm = 16.d0
+    ! end if
 
 end subroutine time_zero_ops
 
@@ -442,13 +451,13 @@ subroutine time_t_ops()
     end do
 
     ! PFI BATH FUNCTIONS
-    do i = 1,F
-        G1_t = G1_t - coeff(i) * xn(i)
-    end do
+    ! do i = 1,F
+    !     G1_t = G1_t - coeff(i) * xn(i)
+    ! end do
 
     ! COHERENCES
-    coh_t(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
-    coh_t(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
+    ! coh_t(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
+    ! coh_t(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
 
 end subroutine time_t_ops
 
@@ -458,8 +467,21 @@ subroutine accumulate_obs(ts)
 
     use variables
     implicit none
-    integer :: i,j
+    integer :: i,j,k,m
     integer, intent(in) :: ts
+    double precision :: temp, np, norm
+
+    ! CALCULATE NORMS
+    if ( Aop == "seo" .and. Bop == "seo" ) then
+        norm = 16.d0
+    else if ( Aop == "wigner" .and. Bop == "wigner" ) then
+        write(6,*) "ERROR: Having both the A- and B-operator be of type ",&
+                   "'wigner' does not make sense! At least one operator ",&
+                   "must be projected onto onto the SEO subspace!"
+        stop
+    else
+        norm = 4.d0
+    endif
 
     ! USE TIME 0 VALUES IF AT TIMESTEP 0 (FORTRAN: 0=1)
     if ( ts == 1 ) then
@@ -470,7 +492,7 @@ subroutine accumulate_obs(ts)
     ! TRADITIONAL POPULATION OPERATORS
     do i = 1,S
         do j = 1,S
-            Cpop(ts,i,j) = Cpop(ts,i,j) + pop_norm * pop_0(i) * pop_t(j)
+            Cpop(ts,i,j) = Cpop(ts,i,j) + norm * pop_0(i) * pop_t(j)
         end do
     end do
 
@@ -478,10 +500,38 @@ subroutine accumulate_obs(ts)
     do i = 1,S
         do j = 1,S
             Cimp(ts,i,j) = Cimp(ts,i,j) + &
-            ( S + imp_norm * Qop_t(j) + imp_norm * Qop_0(i)*Qop_t(j) ) / &
+            ( S + imp_norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / &
             dble(S**2)
         end do
-    end do    
+    end do
+
+    ! Bath energy
+    do i = 1, S
+        do j = 1, F
+            np = 0.5d0 * (pn(i)**2 + xn(i)**2 * omega(i)**2)
+            
+            Epop(ts,i) = Epop(ts,i) + norm * pop_0(i) * sum(pop_t) * np
+            
+            ! Improved: Unity Mapping
+            Eimp(ts,i) = Eimp(ts,i) + norm * (1.d0 + Qop_0(i))/dble(S) * np
+
+            ! Improved: Expand-Improve-Expand-LSC(1)
+            ! temp = 0.d0
+            ! do k = 1,S
+            !     do m = 1,S
+            !         ! Tr[rho phi e^iHt |m><m| N e^-iHt]
+            !         temp = temp + pop_norm * pop_t(m) * np 
+            !     end do
+            !     ! Tr[rho 1 e^iHt Q_k N e^-iHt]
+            !     temp = temp + pop_norm * Qop_t(k) * np
+            !     ! Tr[rho Q_j e^iHt 1 N e^-iHt]
+            !     temp = temp + pop_norm * Qop_0(i) * np
+            !     ! Tr[rho Q_j e^iHt Q_k N e^-iHt]
+            !     temp = temp + pop_norm * Qop_0(i) * Qop_t(k) * np
+            ! end do
+            ! Nimp(ts,i) = Nimp(ts,i) + temp/dble(S*S)
+        end do
+    end do
 
 end subroutine accumulate_obs
 
@@ -493,6 +543,7 @@ subroutine average_obs()
     implicit none
     integer :: i,j,k,a,b,c,d
     character(len=80) :: F1name, F2name, K1name, K3name
+    character(len=120) :: fmt
 
     write(6,"(//'AVERAGING OBSERVABLES:')")
 
@@ -516,39 +567,55 @@ subroutine average_obs()
     close(11)
     write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
 
+    open(11, file="Epop.out", status="unknown", action="write")
+    write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
+    Epop(:,:) = Epop(:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt,  Epop(i,1),  Epop(i,2)
+    end do
+    close(11)
+
+    open(11, file="Eimp.out", status="unknown", action="write")
+    write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
+    Eimp(:,:) = Eimp(:,:)/dble(ntraj)
+    do i = 1, tsteps+1
+        write(11,fmt) (i-1) * dt, Eimp(i,1), Eimp(i,2)
+    end do
+    write(6,*) "- Wrote bath energy to Epop.out and Eimp.out"
+
     ! PROJECTION FREE INPUTS
-    do a = 1,2   
-    do b = 1,2
-    do c = 1,2
-    do d = 1,2
-        write(F1name,'("F1_",4(i1),".out")') a,b,c,d
-        write(F2name,'("F2_",4(i1),".out")') a,b,c,d
-        write(K1name,'("K1_",4(i1),".out")') a,b,c,d
-        write(K3name,'("K3_",4(i1),".out")') a,b,c,d
-        open(11, file=F1name, action="write", status="unknown")
-        open(12, file=F2name, action="write", status="unknown")
-        open(13, file=K1name, action="write", status="unknown")
-        open(14, file=K3name, action="write", status="unknown")
-        do i = 1,tsteps+1
-            write(11,'(F10.4,2x,ES13.6,2x,ES13.6)') &
-            dble(i-1)*dt, F1(i,a,b,c,d) / dble(ntraj)
-            write(12,'(F10.4,2x,ES13.6,2x,ES13.6)') &
-            dble(i-1)*dt, F2(i,a,b,c,d) / dble(ntraj)
-            write(13,'(F10.4,2x,ES13.6,2x,ES13.6)') &
-            dble(i-1)*dt, K1(i,a,b,c,d) / dble(ntraj)
-            write(14,'(F10.4,2x,ES13.6,2x,ES13.6)') &
-            dble(i-1)*dt, K3(i,a,b,c,d) / dble(ntraj)
-        end do
-        close(11)
-        close(12)
-        close(13)
-        close(14)
-    end do
-    end do
-    end do
-    end do
-    write(6,"('- Saved projection free inputs to F1_abcd.out & F2_abcd.out')")
-    write(6,"('- Saved memory kernels to K1_abcd.out & K3_abcd.out')")
+    ! do a = 1,2   
+    ! do b = 1,2
+    ! do c = 1,2
+    ! do d = 1,2
+    !     write(F1name,'("F1_",4(i1),".out")') a,b,c,d
+    !     write(F2name,'("F2_",4(i1),".out")') a,b,c,d
+    !     write(K1name,'("K1_",4(i1),".out")') a,b,c,d
+    !     write(K3name,'("K3_",4(i1),".out")') a,b,c,d
+    !     open(11, file=F1name, action="write", status="unknown")
+    !     open(12, file=F2name, action="write", status="unknown")
+    !     open(13, file=K1name, action="write", status="unknown")
+    !     open(14, file=K3name, action="write", status="unknown")
+    !     do i = 1,tsteps+1
+    !         write(11,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+    !         dble(i-1)*dt, F1(i,a,b,c,d) / dble(ntraj)
+    !         write(12,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+    !         dble(i-1)*dt, F2(i,a,b,c,d) / dble(ntraj)
+    !         write(13,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+    !         dble(i-1)*dt, K1(i,a,b,c,d) / dble(ntraj)
+    !         write(14,'(F10.4,2x,ES13.6,2x,ES13.6)') &
+    !         dble(i-1)*dt, K3(i,a,b,c,d) / dble(ntraj)
+    !     end do
+    !     close(11)
+    !     close(12)
+    !     close(13)
+    !     close(14)
+    ! end do
+    ! end do
+    ! end do
+    ! end do
+    ! write(6,"('- Saved projection free inputs to F1_abcd.out & F2_abcd.out')")
+    ! write(6,"('- Saved memory kernels to K1_abcd.out & K3_abcd.out')")
 
 end subroutine average_obs
 
