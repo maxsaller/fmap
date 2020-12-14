@@ -531,21 +531,23 @@ subroutine average_obs()
     close(11)
 
     open(11, file="Npop.out", status="unknown", action="write")
-    write(fmt,'(a7,i3,a12)') "(f10.4,",S*(F+1),"(2x,ES13.5))"
+    !write(fmt,'(a7,i3,a12)') "(f10.4,",S*(F+1),"(2x,ES13.5))"
+    write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
     Npop(:,:,:) = Npop(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, sum(Npop(i,1,:)), sum(Npop(i,2,:)), &
-        (Npop(i,1,j),j=1,F), (Npop(i,2,j),j=1,F)
+        write(11,fmt) (i-1) * dt, sum(Npop(i,1,:)), sum(Npop(i,2,:))
+        ! (Npop(i,1,j),j=1,F), (Npop(i,2,j),j=1,F)
     end do
     write(6,*) "- Wrote per DoF photon numbers to Npop.out"
     close(11)
 
     open(11, file="Nimp.out", status="unknown", action="write")
-    write(fmt,'(a7,i3,a12)') "(f10.4,",S*(F+1),"(2x,ES13.5))"
+    !write(fmt,'(a7,i3,a12)') "(f10.4,",S*(F+1),"(2x,ES13.5))"
+    write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
     Nimp(:,:,:) = Nimp(:,:,:)/dble(ntraj)
     do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, sum(Nimp(i,1,:)), sum(Nimp(i,2,:)), &
-        (Nimp(i,1,j),j=1,F), (Nimp(i,2,j),j=1,F)
+        write(11,fmt) (i-1) * dt, sum(Nimp(i,1,:)), sum(Nimp(i,2,:))
+        ! (Nimp(i,1,j),j=1,F), (Nimp(i,2,j),j=1,F)
     end do
     write(6,*) "- Wrote per DoF photon numbers to Nimp.out"
     close(11)

@@ -4,7 +4,7 @@ field_modes             200
 ==============================
 
 === convergence parameters ===
-num_of_trajectories     100000
+num_of_trajectories     1000
 num_of_time-steps       21000
 time-step_duration      0.1
 cavity_steps            1000
@@ -14,6 +14,6 @@ integrator_type         diag
 
 ===== method parameters ======
 A-operator_type_C_AB    seo
-B-operator_type_C_AB    seo
-electronic_sampling     phi2
+B-operator_type_C_AB    wigner
+electronic_sampling     phi
 ==============================
