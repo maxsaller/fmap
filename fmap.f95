@@ -194,31 +194,33 @@ subroutine allocate_arrays()
     ! POPULATION ARRAYS
     allocate( pop_0(S) )
     allocate( pop_t(S) )
+    allocate( coh_0(S) )
+    allocate( coh_t(S) )
     allocate( Qop_0(S) )
     allocate( Qop_t(S) )
     allocate( Cpop(tsteps+1,S,S) )
     allocate( Cimp(tsteps+1,S,S) )
+    allocate( Cdot(tsteps+1,S,S) )
+    allocate( Cddot(tsteps+1,S,S) )
     Cpop(:,:,:) = 0.d0
     Cimp(:,:,:) = 0.d0
+    Cdot(:,:,:) = 0.d0
+    Cddot(:,:,:) = 0.d0
 
-    allocate( Epop(tsteps+1,S) )
-    allocate( Eimp(tsteps+1,S) )
-    Epop(:,:) = 0.d0
-    Eimp(:,:) = 0.d0
+    ! allocate( Epop(tsteps+1,S) )
+    ! allocate( Eimp(tsteps+1,S) )
+    ! Epop(:,:) = 0.d0
+    ! Eimp(:,:) = 0.d0
 
     ! PROJECTION FREE INPUT ARRAYS
     ! allocate( F1(tsteps+1,S,S,S,S) )
     ! allocate( F2(tsteps+1,S,S,S,S) )
     ! allocate( K1(tsteps+1,S,S,S,S) )
-    ! allocate( K3(tsteps+1,S,S,S,S) )
-    ! allocate( coh_0(S) )
-    ! allocate( coh_t(S) )
+    ! allocate( K3(tsteps+1,S,S,S,S) 
     ! F1(:,:,:,:,:) = 0.d0
     ! F2(:,:,:,:,:) = 0.d0
     ! K1(:,:,:,:,:) = 0.d0
     ! K3(:,:,:,:,:) = 0.d0
-    ! coh_0(:) = 0.d0
-    ! coh_t(:) = 0.d0
     ! G1_0 = 0.d0
     ! G1_t = 0.d0
     ! G2_0 = 0.d0
@@ -253,17 +255,20 @@ subroutine deallocate_arrays()
     ! POPULATION ARRAYS
     deallocate( Cpop )
     deallocate( Cimp )
+    deallocate( Cdot )
+    deallocate( Cddot )
     deallocate( pop_0 )
     deallocate( pop_t )
+    deallocate( coh_0 )
+    deallocate( coh_t )
     deallocate( Qop_0 )
     deallocate( Qop_t )
 
-    deallocate( Epop )
-    deallocate( Eimp )
+    ! deallocate( Epop )
+    ! deallocate( Eimp )
 
     ! PROJECTION FREE INPUT ARRAYS
-    ! deallocate( coh_0 )
-    ! deallocate( coh_t )
+
     ! deallocate( F1 )
     ! deallocate( F2 )
     ! deallocate( K1 )
@@ -362,6 +367,10 @@ subroutine time_zero_ops()
     integer :: i,j
     double precision :: zpe
 
+    ! COHERENCES
+    coh_0(2) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2)) / 2.d0
+    coh_0(1) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1)) / 2.d0
+
     ! TRADITIONAL POPULATION OPERATORS
     if ( Aop == "seo" ) then
         zpe = 0.5d0
@@ -393,10 +402,6 @@ subroutine time_zero_ops()
     !            tanh(beta * omega(i)/2.d0) / omega(i)
     ! end do
 
-    ! COHERENCES
-    ! coh_0(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
-    ! coh_0(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
-
     ! CALCULATE NORMS
     ! if ( Aop == "seo" .and. Bop == "seo" ) then
     !     pop_norm = 16.d0
@@ -425,6 +430,10 @@ subroutine time_t_ops()
     implicit none
     integer :: i,j
     double precision :: zpe
+
+    ! COHERENCES
+    coh_t(2) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2)) / 2.d0
+    coh_t(1) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1)) / 2.d0
 
     ! TRADITIONAL POPULATION OPERATORS
     if ( Bop == "seo" ) then
@@ -455,10 +464,6 @@ subroutine time_t_ops()
     !     G1_t = G1_t - coeff(i) * xn(i)
     ! end do
 
-    ! COHERENCES
-    ! coh_t(1) = dcmplx(XE(1)*XE(2) + PE(1)*PE(2), XE(1)*PE(2) - PE(1)*XE(2))
-    ! coh_t(2) = dcmplx(XE(2)*XE(1) + PE(2)*PE(1), XE(2)*PE(1) - PE(2)*XE(1))
-
 end subroutine time_t_ops
 
 
@@ -485,6 +490,7 @@ subroutine accumulate_obs(ts)
 
     ! USE TIME 0 VALUES IF AT TIMESTEP 0 (FORTRAN: 0=1)
     if ( ts == 1 ) then
+        coh_t(:) = coh_0(:)
         pop_t(:) = pop_0(:)
         Qop_t(:) = Qop_0(:)
     end if
@@ -500,38 +506,55 @@ subroutine accumulate_obs(ts)
     do i = 1,S
         do j = 1,S
             Cimp(ts,i,j) = Cimp(ts,i,j) + &
-            ( S + imp_norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / &
+            ( S + norm * Qop_t(j) + norm * Qop_0(i)*Qop_t(j) ) / &
             dble(S**2)
         end do
     end do
 
-    ! Bath energy
-    do i = 1, S
-        do j = 1, F
-            np = 0.5d0 * (pn(i)**2 + xn(i)**2 * omega(i)**2)
-            
-            Epop(ts,i) = Epop(ts,i) + norm * pop_0(i) * sum(pop_t) * np
-            
-            ! Improved: Unity Mapping
-            Eimp(ts,i) = Eimp(ts,i) + norm * (1.d0 + Qop_0(i))/dble(S) * np
 
-            ! Improved: Expand-Improve-Expand-LSC(1)
-            ! temp = 0.d0
-            ! do k = 1,S
-            !     do m = 1,S
-            !         ! Tr[rho phi e^iHt |m><m| N e^-iHt]
-            !         temp = temp + pop_norm * pop_t(m) * np 
-            !     end do
-            !     ! Tr[rho 1 e^iHt Q_k N e^-iHt]
-            !     temp = temp + pop_norm * Qop_t(k) * np
-            !     ! Tr[rho Q_j e^iHt 1 N e^-iHt]
-            !     temp = temp + pop_norm * Qop_0(i) * np
-            !     ! Tr[rho Q_j e^iHt Q_k N e^-iHt]
-            !     temp = temp + pop_norm * Qop_0(i) * Qop_t(k) * np
-            ! end do
-            ! Nimp(ts,i) = Nimp(ts,i) + temp/dble(S*S)
-        end do
+    ! DIFFERENTIAL POPULATION ACF
+    do i = 1,S
+        Cdot(ts,i,1) = Cdot(ts,i,1) + norm * pop_0(i) * 2.d0*delta*AIMAG(coh_t(2))
+        Cdot(ts,i,2) = Cdot(ts,i,2) + norm * pop_0(i) * 2.d0*delta*AIMAG(coh_t(1))
+
+        Cddot(ts,i,1) = Cddot(ts,i,1) + norm * pop_0(i) * -delta * (&
+                        -4.d0*epsilon*REAL(coh_t(2)) &
+                        +2.d0*delta*(pop_t(1)-pop_t(2)) &
+                        -4.d0*sum(coeff*xn*REAL(coh_t(2))) )
+
+        Cddot(ts,i,2) = Cddot(ts,i,2) + norm * pop_0(i) * -delta * (&
+                        +4.d0*epsilon*REAL(coh_t(1)) &
+                        +2.d0*delta*(pop_t(2)-pop_t(1)) &
+                        +4.d0*sum(coeff*xn*REAL(coh_t(1))) )
     end do
+
+    ! Bath energy
+    ! do i = 1, S
+    !     do j = 1, F
+    !         np = 0.5d0 * (pn(i)**2 + xn(i)**2 * omega(i)**2)
+            
+    !         Epop(ts,i) = Epop(ts,i) + norm * pop_0(i) * sum(pop_t) * np
+            
+    !         ! Improved: Unity Mapping
+    !         Eimp(ts,i) = Eimp(ts,i) + norm * (1.d0 + Qop_0(i))/dble(S) * np
+
+    !         ! Improved: Expand-Improve-Expand-LSC(1)
+    !         ! temp = 0.d0
+    !         ! do k = 1,S
+    !         !     do m = 1,S
+    !         !         ! Tr[rho phi e^iHt |m><m| N e^-iHt]
+    !         !         temp = temp + pop_norm * pop_t(m) * np 
+    !         !     end do
+    !         !     ! Tr[rho 1 e^iHt Q_k N e^-iHt]
+    !         !     temp = temp + pop_norm * Qop_t(k) * np
+    !         !     ! Tr[rho Q_j e^iHt 1 N e^-iHt]
+    !         !     temp = temp + pop_norm * Qop_0(i) * np
+    !         !     ! Tr[rho Q_j e^iHt Q_k N e^-iHt]
+    !         !     temp = temp + pop_norm * Qop_0(i) * Qop_t(k) * np
+    !         ! end do
+    !         ! Nimp(ts,i) = Nimp(ts,i) + temp/dble(S*S)
+    !     end do
+    ! end do
 
 end subroutine accumulate_obs
 
@@ -567,21 +590,40 @@ subroutine average_obs()
     close(11)
     write(6,"('- Saved improved population operator corr. fn. to Cimp.out')")
 
-    open(11, file="Epop.out", status="unknown", action="write")
-    write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
-    Epop(:,:) = Epop(:,:)/dble(ntraj)
-    do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt,  Epop(i,1),  Epop(i,2)
+    ! DIFFERENTIAL POPULATION ACF
+    open(11, file="Cdot.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        Cdot(i,:,:) = Cdot(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i-1)*dt, Cdot(i,1,1), Cdot(i,1,2), Cdot(i,2,1), Cdot(i,2,2)
     end do
     close(11)
+    write(6,"('- Saved time derivative of population corr. fn. to Cdot.out')")
 
-    open(11, file="Eimp.out", status="unknown", action="write")
-    write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
-    Eimp(:,:) = Eimp(:,:)/dble(ntraj)
-    do i = 1, tsteps+1
-        write(11,fmt) (i-1) * dt, Eimp(i,1), Eimp(i,2)
+    open(11, file="Cddot.out", action="write", status="unknown")
+    do i = 1,tsteps+1
+        Cddot(i,:,:) = Cddot(i,:,:) / dble(ntraj)
+        write(11,'(F10.4,2x,4(ES13.6,2x))') &
+        dble(i-1)*dt, Cddot(i,1,1), Cddot(i,1,2), Cddot(i,2,1), Cddot(i,2,2)
     end do
-    write(6,*) "- Wrote bath energy to Epop.out and Eimp.out"
+    close(11)
+    write(6,"('- Saved 2nd time derivative of population corr. fn. to Cddot.out')")
+
+    ! open(11, file="Epop.out", status="unknown", action="write")
+    ! write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
+    ! Epop(:,:) = Epop(:,:)/dble(ntraj)
+    ! do i = 1, tsteps+1
+    !     write(11,fmt) (i-1) * dt,  Epop(i,1),  Epop(i,2)
+    ! end do
+    ! close(11)
+
+    ! open(11, file="Eimp.out", status="unknown", action="write")
+    ! write(fmt,'(a7,i3,a12)') "(f10.4,",S,"(2x,ES13.5))"
+    ! Eimp(:,:) = Eimp(:,:)/dble(ntraj)
+    ! do i = 1, tsteps+1
+    !     write(11,fmt) (i-1) * dt, Eimp(i,1), Eimp(i,2)
+    ! end do
+    ! write(6,*) "- Wrote bath energy to Epop.out and Eimp.out"
 
     ! PROJECTION FREE INPUTS
     ! do a = 1,2   
