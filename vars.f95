@@ -56,10 +56,14 @@ module variables
     double precision, allocatable :: CQmQn(:,:,:)! Improved population CF
 
     ! BATH OBSERVABLES
-    double precision, allocatable :: Npop(:,:,:)! Photon number
-    double precision, allocatable :: Nimp(:,:,:)! Photon number
-    double precision, allocatable :: Ipop(:,:,:)! Cavity intensity
-    double precision, allocatable :: Iimp(:,:,:)! Cavity intensity
+    double precision, allocatable :: Npop(:,:)  ! Photon number
+    double precision, allocatable :: Nimp(:,:)  ! Photon number
+    double precision, allocatable :: NIIz(:)    ! Photon number
+    double precision, allocatable :: NIIt(:)    ! Photon number
+    double precision, allocatable :: NQI(:,:)   ! Photon number
+    double precision, allocatable :: Ndot(:,:)  ! Photon number
+    ! double precision, allocatable :: Ipop(:,:,:)! Cavity intensity
+    ! double precision, allocatable :: Iimp(:,:,:)! Cavity intensity
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
