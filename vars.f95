@@ -58,10 +58,8 @@ module variables
     double precision, allocatable :: CQmQn(:,:,:)! Improved population CF
 
     ! BATH OBSERVABLES
-    double precision, allocatable :: Npop(:,:,:)! Photon number
-    double precision, allocatable :: Nimp(:,:,:)! Photon number
-    double precision, allocatable :: Ipop(:,:,:)! Cavity intensity function
-    double precision, allocatable :: Iimp(:,:,:)! Cavity intensity function
+    double precision, allocatable :: Npop(:,:)  ! Photon number
+    double precision, allocatable :: NQI(:,:)   ! Photon number improved
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
