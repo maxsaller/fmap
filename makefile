@@ -22,6 +22,7 @@ clean:
 	@rm -fv *.dat
 	@rm -fv *.mod
 	@rm -fv *.log
+	@rm -fv fort.*
 
 plot:
 	@gnuplot -p -e $(PLOT)

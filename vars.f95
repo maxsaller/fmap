@@ -59,7 +59,14 @@ module variables
 
     ! BATH OBSERVABLES
     double precision, allocatable :: Npop(:,:)  ! Photon number
+    double precision, allocatable :: Nimp(:,:)  ! Photon number improved
     double precision, allocatable :: NQI(:,:)   ! Photon number improved
+    double precision, allocatable :: NII(:,:)   ! Photon number improved
+
+    double precision, allocatable :: Ipop(:,:,:)! Cavity Intesity
+
+    double precision, allocatable :: Ekin(:)  ! Kinetic energy
+    double precision, allocatable :: Epot(:)  ! Potential energy
 
     ! LAPACK PARAMETERS
     integer :: info, lenwork                    ! Integer parameters for LAPACK
